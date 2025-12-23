@@ -241,4 +241,81 @@ class JsonQueryCompilerTest {
 
     Assertions.assertEquals(expected, result);
   }
+
+  @Test
+  void filterOnSingleObjectDropsOrPasses() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+
+    JsonElement data = JsonParser.parseString("""
+      {
+        "pm_1_0": 0,
+        "timestamp": "2025-12-23T05:37:11.757186593Z",
+        "pm_2_5": 0,
+        "pm_10": 0,
+        "pm_1_0_atm": 0,
+        "pm_2_5_atm": 0,
+        "pm_10_atm": 0,
+        "particles_gt_3": 108,
+        "particles_gt_5": 36,
+        "particles_gt_10": 4,
+        "particles_gt_25": 2,
+        "particles_gt_50": 2,
+        "particles_gt_100": 0
+      }
+      """);
+
+    JsonElement query = JsonParser.parseString("""
+      ["pipe",
+        ["filter", "particles_gt_10 > 100"],
+        ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
+      ]
+      """);
+
+    JsonElement result = compiler.compile(query).apply(data);
+
+    Assertions.assertTrue(result.isJsonNull());
+  }
+
+  @Test
+  void filterOnSingleObjectPassesAndPicks() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+
+    JsonElement data = JsonParser.parseString("""
+      {
+        "pm_1_0": 0,
+        "timestamp": "2025-12-23T05:37:11.757186593Z",
+        "pm_2_5": 0,
+        "pm_10": 0,
+        "pm_1_0_atm": 0,
+        "pm_2_5_atm": 0,
+        "pm_10_atm": 0,
+        "particles_gt_3": 108,
+        "particles_gt_5": 36,
+        "particles_gt_10": 4,
+        "particles_gt_25": 2,
+        "particles_gt_50": 2,
+        "particles_gt_100": 0
+      }
+      """);
+
+    JsonElement query = JsonParser.parseString("""
+      ["pipe",
+        ["filter", "particles_gt_10 < 10"],
+        ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
+      ]
+      """);
+
+    JsonElement result = compiler.compile(query).apply(data);
+
+    JsonElement expected = JsonParser.parseString("""
+      {
+        "timestamp": "2025-12-23T05:37:11.757186593Z",
+        "particles_gt_10": 4,
+        "pm_2_5": 0
+      }
+      """);
+
+    Assertions.assertEquals(expected, result);
+  }
+
 }

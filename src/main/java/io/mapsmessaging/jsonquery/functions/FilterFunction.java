@@ -33,8 +33,17 @@ public final class FilterFunction implements JsonQueryFunction {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
+
+      if (data.isJsonObject()) {
+        JsonObject object = data.getAsJsonObject();
+        if (executor.evaluate(object)) {
+          return object;
+        }
+        return JsonNull.INSTANCE;
+      }
+
       if (!data.isJsonArray()) {
-        return data;
+        return JsonNull.INSTANCE;
       }
 
       JsonArray inputArray = data.getAsJsonArray();
