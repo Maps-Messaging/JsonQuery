@@ -3,11 +3,8 @@ package io.mapsmessaging.jsonquery.functions;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
-import io.mapsmessaging.selector.ParseException;
-import io.mapsmessaging.selector.SelectorParser;
-import io.mapsmessaging.selector.operators.ParserExecutor;
 
 import java.util.List;
 import java.util.function.Function;
@@ -17,49 +14,56 @@ public final class FilterFunction implements JsonQueryFunction {
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("filter expects 1 argument: a JMS selector string");
+      throw new IllegalArgumentException("filter expects 1 argument");
     }
 
-    String selector = JsonQueryGson.requireString(rawArgs.get(0), "filter selector must be a string");
-
-    ParserExecutor executor;
-    try {
-      executor = SelectorParser.compile(selector);
-    } catch (ParseException e) {
-      throw new IllegalArgumentException("Invalid selector: " + selector, e);
-    }
+    JsonElement predicateExpression = rawArgs.get(0);
+    Function<JsonElement, JsonElement> predicate = compiler.compile(predicateExpression);
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
 
-      if (data.isJsonObject()) {
-        JsonObject object = data.getAsJsonObject();
-        if (executor.evaluate(object)) {
-          return object;
-        }
-        return JsonNull.INSTANCE;
-      }
-
       if (!data.isJsonArray()) {
-        return JsonNull.INSTANCE;
+        throw new IllegalArgumentException("Array expected");
       }
 
       JsonArray inputArray = data.getAsJsonArray();
       JsonArray outputArray = new JsonArray();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement element = inputArray.get(i);
-        if (element != null && element.isJsonObject()) {
-          JsonObject object = element.getAsJsonObject();
-          if (executor.evaluate(object)) {
-            outputArray.add(object);
-          }
+      for (int index = 0; index < inputArray.size(); index++) {
+        JsonElement element = inputArray.get(index);
+        JsonElement predicateResult = predicate.apply(element);
+
+        if (isTruthy(predicateResult)) {
+          outputArray.add(element);
         }
       }
 
       return outputArray;
     };
+  }
+
+  private static boolean isTruthy(JsonElement value) {
+    if (value == null || value.isJsonNull()) {
+      return false;
+    }
+
+    if (value.isJsonPrimitive()) {
+      JsonPrimitive primitive = value.getAsJsonPrimitive();
+
+      if (primitive.isBoolean()) {
+        return primitive.getAsBoolean();
+      }
+
+      if (primitive.isNumber()) {
+        return primitive.getAsDouble() != 0.0d;
+      }
+
+      return true;
+    }
+
+    return true;
   }
 }

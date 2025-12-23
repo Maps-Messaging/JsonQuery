@@ -28,9 +28,13 @@ public final class FunctionRegistry {
     Map<String, JsonQueryFunction> builtIns = new HashMap<>();
     builtIns.put("get", new GetFunction());
     builtIns.put("pipe", new PipeFunction());
+    builtIns.put("selector", new FilterSelectorFunction());
     builtIns.put("filter", new FilterFunction());
+    builtIns.put("gte", new GteFunction());
+    builtIns.put("gt", new GtFunction());
     builtIns.put("sort", new SortFunction());
     builtIns.put("map", new MapFunction());
+    builtIns.put("sum", new SumFunction());
     builtIns.put("pick", new PickFunction());
     return new FunctionRegistry(builtIns);
   }
