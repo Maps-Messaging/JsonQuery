@@ -1,9 +1,10 @@
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.binary;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
 import java.util.function.BiPredicate;

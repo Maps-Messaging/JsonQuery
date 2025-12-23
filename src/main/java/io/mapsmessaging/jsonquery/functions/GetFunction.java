@@ -3,13 +3,20 @@ package io.mapsmessaging.jsonquery.functions;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.Function;
 
 public final class GetFunction implements JsonQueryFunction {
+
+  @Override
+  public String getName() {
+    return "get";
+  }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
@@ -17,55 +24,64 @@ public final class GetFunction implements JsonQueryFunction {
       return data -> data == null ? JsonNull.INSTANCE : data;
     }
 
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("get expects 0 or 1 arguments");
-    }
+    for (JsonElement rawArg : rawArgs) {
+      if (rawArg == null || rawArg.isJsonNull() || !rawArg.isJsonPrimitive()) {
+        throw new IllegalArgumentException("get expects path segments of type string or number");
+      }
 
-    JsonElement rawArg = rawArgs.get(0);
-    if (rawArg == null || rawArg.isJsonNull()) {
-      throw new IllegalArgumentException("get expects a key (string) or index (number)");
-    }
+      JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
+      if (!primitive.isString() && !primitive.isNumber()) {
+        throw new IllegalArgumentException("get expects path segments of type string or number");
+      }
 
-    if (!rawArg.isJsonPrimitive()) {
-      throw new IllegalArgumentException("get expects a key (string) or index (number)");
-    }
-
-    JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
-
-    if (primitive.isString()) {
-      String key = primitive.getAsString();
-      return data -> {
-        if (data == null || data.isJsonNull()) {
-          return JsonNull.INSTANCE;
+      if (primitive.isNumber()) {
+        BigDecimal bigDecimal = primitive.getAsBigDecimal();
+        if (bigDecimal.scale() > 0) {
+          throw new IllegalArgumentException("get expects an integer array index");
         }
-        if (!data.isJsonObject()) {
-          return JsonNull.INSTANCE;
+        if (bigDecimal.compareTo(BigDecimal.valueOf(Integer.MIN_VALUE)) < 0
+            || bigDecimal.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
+          throw new IllegalArgumentException("get array index out of int range");
         }
-        JsonElement value = data.getAsJsonObject().get(key);
-        return value == null ? JsonNull.INSTANCE : value;
-      };
+      }
     }
 
-    if (primitive.isNumber()) {
-      int index = primitive.getAsInt();
-      return data -> {
-        if (data == null || data.isJsonNull()) {
-          return JsonNull.INSTANCE;
-        }
-        if (!data.isJsonArray()) {
+    return data -> {
+      JsonElement current = data == null ? JsonNull.INSTANCE : data;
+
+      for (JsonElement rawArg : rawArgs) {
+        if (current == null || current.isJsonNull()) {
           return JsonNull.INSTANCE;
         }
 
-        JsonArray array = data.getAsJsonArray();
+        JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
+
+        if (primitive.isString()) {
+          if (!current.isJsonObject()) {
+            return JsonNull.INSTANCE;
+          }
+
+          JsonObject object = current.getAsJsonObject();
+          JsonElement next = object.get(primitive.getAsString());
+          current = next == null ? JsonNull.INSTANCE : next;
+          continue;
+        }
+
+        int index = primitive.getAsInt();
+        if (!current.isJsonArray()) {
+          return JsonNull.INSTANCE;
+        }
+
+        JsonArray array = current.getAsJsonArray();
         if (index < 0 || index >= array.size()) {
           return JsonNull.INSTANCE;
         }
 
-        JsonElement value = array.get(index);
-        return value == null ? JsonNull.INSTANCE : value;
-      };
-    }
+        JsonElement next = array.get(index);
+        current = next == null ? JsonNull.INSTANCE : next;
+      }
 
-    throw new IllegalArgumentException("get expects a key (string) or index (number)");
+      return current == null ? JsonNull.INSTANCE : current;
+    };
   }
 }

@@ -8,20 +8,18 @@ import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import java.util.List;
 import java.util.function.Function;
 
-public final class FilterSelectorFunction implements JsonQueryFunction {
+public final class FlattenFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "selector";
+    return "flatten";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("filter expects 1 argument");
+    if (!rawArgs.isEmpty()) {
+      throw new IllegalArgumentException("flatten expects 0 arguments");
     }
-
-    Function<JsonElement, JsonElement> predicate = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
@@ -35,8 +33,16 @@ public final class FilterSelectorFunction implements JsonQueryFunction {
       JsonArray output = new JsonArray();
 
       for (JsonElement element : input) {
-        JsonElement predicateResult = predicate.apply(element);
-        if (JsonQueryTruthiness.isTruthy(predicateResult)) {
+        if (element == null || element.isJsonNull()) {
+          output.add(JsonNull.INSTANCE);
+          continue;
+        }
+
+        if (element.isJsonArray()) {
+          for (JsonElement inner : element.getAsJsonArray()) {
+            output.add(inner == null ? JsonNull.INSTANCE : inner);
+          }
+        } else {
           output.add(element);
         }
       }

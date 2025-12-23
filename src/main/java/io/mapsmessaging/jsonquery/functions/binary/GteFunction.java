@@ -1,10 +1,15 @@
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.binary;
 
 import com.google.gson.JsonElement;
 
 import java.util.function.BiPredicate;
 
-public final class GtFunction extends AbstractBinaryPredicateFunction {
+public final class GteFunction extends AbstractBinaryPredicateFunction {
+
+  @Override
+  public String getName() {
+    return "gte";
+  }
 
   @Override
   protected BiPredicate<JsonElement, JsonElement> predicate() {
@@ -12,7 +17,7 @@ public final class GtFunction extends AbstractBinaryPredicateFunction {
       if ((isNumber(leftValue) && isNumber(rightValue))
           || (isString(leftValue) && isString(rightValue))
           || (isBoolean(leftValue) && isBoolean(rightValue))) {
-        return compare(leftValue, rightValue) > 0;
+        return compare(leftValue, rightValue) >= 0;
       }
       return false;
     };
@@ -20,6 +25,6 @@ public final class GtFunction extends AbstractBinaryPredicateFunction {
 
   @Override
   protected String functionName() {
-    return "gt";
+    return "gte";
   }
 }

@@ -8,20 +8,17 @@ import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import java.util.List;
 import java.util.function.Function;
 
-public final class FilterSelectorFunction implements JsonQueryFunction {
-
+public final class ReverseFunction implements JsonQueryFunction {
   @Override
   public String getName() {
-    return "selector";
+    return "reverse";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("filter expects 1 argument");
+    if (!rawArgs.isEmpty()) {
+      throw new IllegalArgumentException("reverse expects 0 arguments");
     }
-
-    Function<JsonElement, JsonElement> predicate = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
@@ -33,14 +30,10 @@ public final class FilterSelectorFunction implements JsonQueryFunction {
 
       JsonArray input = data.getAsJsonArray();
       JsonArray output = new JsonArray();
-
-      for (JsonElement element : input) {
-        JsonElement predicateResult = predicate.apply(element);
-        if (JsonQueryTruthiness.isTruthy(predicateResult)) {
-          output.add(element);
-        }
+      for (int index = input.size() - 1; index >= 0; index--) {
+        JsonElement element = input.get(index);
+        output.add(element == null ? JsonNull.INSTANCE : element);
       }
-
       return output;
     };
   }

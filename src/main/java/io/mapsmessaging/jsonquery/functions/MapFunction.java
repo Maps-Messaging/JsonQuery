@@ -11,6 +11,11 @@ import java.util.function.Function;
 public final class MapFunction implements JsonQueryFunction {
 
   @Override
+  public String getName() {
+    return "map";
+  }
+
+  @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (rawArgs.size() != 1) {
       throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");

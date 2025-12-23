@@ -12,6 +12,11 @@ import java.util.function.Function;
 public final class FilterFunction implements JsonQueryFunction {
 
   @Override
+  public String getName() {
+    return "filter";
+  }
+
+  @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (rawArgs.size() != 1) {
       throw new IllegalArgumentException("filter expects 1 argument");

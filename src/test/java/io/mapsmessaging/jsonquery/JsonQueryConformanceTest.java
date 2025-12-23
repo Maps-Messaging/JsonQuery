@@ -35,18 +35,13 @@ public class JsonQueryConformanceTest {
    * Wire your engine here.
    */
   private final JsonQueryEngine engine = (input, query) -> {
-    System.err.println("INPUT>"+input+"<");
-    System.err.println("QUERY["+query+"]");
-
     try {
       JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
       Function<JsonElement, JsonElement> compiled = compiler.compile(query);
-      JsonElement out = compiled.apply(input);
-      System.err.println("OUT{" + out + "}");
-      return out;
+      return compiled.apply(input);
     }
     catch(Throwable t){
-      t.printStackTrace();
+     // t.printStackTrace();
       throw t;
     }
   };
