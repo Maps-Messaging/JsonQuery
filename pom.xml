@@ -95,12 +95,19 @@
         <sonar.test.exclusions>
             **/*Test.*,**/*IT.*, **.*JMH.*
         </sonar.test.exclusions>
-        <maps.jms_selector.version>2.1.1-SNAPSHOT</maps.jms_selector.version>
     </properties>
 
     <profiles>
         <profile>
+            <!-- Default profile for regular releases -->
             <id>release</id>
+            <dependencies>
+                <dependency>
+                    <groupId>io.mapsmessaging</groupId>
+                    <artifactId>jms_selector_parser</artifactId>
+                    <version>2.1.0</version>
+                </dependency>
+            </dependencies>
             <build>
                 <plugins>
                     <plugin>
@@ -113,8 +120,39 @@
                             <autoPublish>true</autoPublish>
                         </configuration>
                     </plugin>
+
+                    <!-- Disable default deploy for releases -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>3.1.1</version>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </plugin>
                 </plugins>
             </build>
+        </profile>
+
+        <profile>
+            <id>snapshot</id>
+            <repositories>
+                <repository>
+                    <id>maps_snapshots</id>
+                    <name>maps_snapshot_repository</name>
+                    <url>https://repository.mapsmessaging.io/repository/maps_snapshots/</url>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+            <dependencies>
+                <dependency>
+                    <groupId>io.mapsmessaging</groupId>
+                    <artifactId>jms_selector_parser</artifactId>
+                    <version>2.1.1-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
         </profile>
     </profiles>
 
@@ -269,11 +307,7 @@
             <version>1.18.42</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>io.mapsmessaging</groupId>
-            <artifactId>jms_selector_parser</artifactId>
-            <version>${maps.jms_selector.version}</version>
-        </dependency>
+
         <!-- https://mvnrepository.com/artifact/com.google.code.gson/gson -->
         <dependency>
             <groupId>com.google.code.gson</groupId>

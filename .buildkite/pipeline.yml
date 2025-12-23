@@ -1,0 +1,13 @@
+steps:
+  - label: ":maven: Build and Deploy"
+    command:
+      - export SONAR_TOKEN=$(buildkite-agent secret get SONAR_TOKEN)
+      - export NVD_API_KEY=$(buildkite-agent secret get nvd_api_key)
+      - mvn -Dgpg.skip=true -DskipTests=true clean deploy -Psnapshot -U
+      - mvn sonar:sonar -Dsonar.login=${SONAR_TOKEN}
+
+    env:
+      SONAR_TOKEN: "${SONAR_TOKEN}"
+      BUILDKITE_ANALYTICS_TOKEN: "$(buildkite-agent secret get jsonqueryTestSuite)"
+    agents:
+      queue: "raspberrypi_build_agent"
