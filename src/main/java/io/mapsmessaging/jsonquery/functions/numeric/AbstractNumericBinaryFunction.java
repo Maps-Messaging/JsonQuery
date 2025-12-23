@@ -1,7 +1,9 @@
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.numeric;
 
 import com.google.gson.JsonElement;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.AbstractFunction;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
 import java.util.function.Function;

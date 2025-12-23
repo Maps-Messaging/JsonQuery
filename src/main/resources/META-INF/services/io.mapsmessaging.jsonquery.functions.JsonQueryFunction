@@ -17,11 +17,9 @@
 #  limitations under the License.
 #
 
-io.mapsmessaging.jsonquery.functions.AbsFunction
-io.mapsmessaging.jsonquery.functions.AddFunction
-io.mapsmessaging.jsonquery.functions.AndFunction
+io.mapsmessaging.jsonquery.functions.numeric.AbsFunction
+io.mapsmessaging.jsonquery.functions.logic.AndFunction
 io.mapsmessaging.jsonquery.functions.ArrayFunction
-io.mapsmessaging.jsonquery.functions.DivideFunction
 io.mapsmessaging.jsonquery.functions.ExistsFunction
 io.mapsmessaging.jsonquery.functions.FilterFunction
 io.mapsmessaging.jsonquery.functions.FilterSelectorFunction
@@ -40,17 +38,15 @@ io.mapsmessaging.jsonquery.functions.MapObjectFunction
 io.mapsmessaging.jsonquery.functions.MapValuesFunction
 io.mapsmessaging.jsonquery.functions.MatchAllFunction
 io.mapsmessaging.jsonquery.functions.MatchFunction
-io.mapsmessaging.jsonquery.functions.MaxFunction
-io.mapsmessaging.jsonquery.functions.MinFunction
-io.mapsmessaging.jsonquery.functions.MultiplyFunction
+io.mapsmessaging.jsonquery.functions.numeric.MaxFunction
+io.mapsmessaging.jsonquery.functions.numeric.MinFunction
 io.mapsmessaging.jsonquery.functions.NotFunction
 io.mapsmessaging.jsonquery.functions.NotInFunction
 io.mapsmessaging.jsonquery.functions.NumberFunction
 io.mapsmessaging.jsonquery.functions.ObjectFunction
-io.mapsmessaging.jsonquery.functions.OrFunction
+io.mapsmessaging.jsonquery.functions.logic.OrFunction
 io.mapsmessaging.jsonquery.functions.PickFunction
 io.mapsmessaging.jsonquery.functions.PipeFunction
-io.mapsmessaging.jsonquery.functions.PowFunction
 io.mapsmessaging.jsonquery.functions.RegexFunction
 io.mapsmessaging.jsonquery.functions.ReverseFunction
 io.mapsmessaging.jsonquery.functions.RoundFunction
@@ -59,14 +55,22 @@ io.mapsmessaging.jsonquery.functions.SortFunction
 io.mapsmessaging.jsonquery.functions.SplitFunction
 io.mapsmessaging.jsonquery.functions.StringFunction
 io.mapsmessaging.jsonquery.functions.SubstringFunction
-io.mapsmessaging.jsonquery.functions.SubtractFunction
 io.mapsmessaging.jsonquery.functions.SumFunction
 io.mapsmessaging.jsonquery.functions.UniqByFunction
 io.mapsmessaging.jsonquery.functions.UniqFunction
 io.mapsmessaging.jsonquery.functions.ValuesFunction
 
+io.mapsmessaging.jsonquery.functions.numeric.AddFunction
+io.mapsmessaging.jsonquery.functions.numeric.DivideFunction
+io.mapsmessaging.jsonquery.functions.numeric.MultiplyFunction
+io.mapsmessaging.jsonquery.functions.numeric.PowFunction
+io.mapsmessaging.jsonquery.functions.numeric.SubtractFunction
+io.mapsmessaging.jsonquery.functions.numeric.ModFunction
+
+
 io.mapsmessaging.jsonquery.functions.binary.EqFunction
 io.mapsmessaging.jsonquery.functions.binary.GteFunction
+io.mapsmessaging.jsonquery.functions.binary.GtFunction
 io.mapsmessaging.jsonquery.functions.binary.LteFunction
 io.mapsmessaging.jsonquery.functions.binary.LtFunction
 io.mapsmessaging.jsonquery.functions.binary.NeFunction

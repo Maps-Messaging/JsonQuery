@@ -1,17 +1,18 @@
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.numeric;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MinFunction implements JsonQueryFunction {
+public final class MaxFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "min";
+    return "max";
   }
 
   @Override
@@ -19,7 +20,7 @@ public final class MinFunction implements JsonQueryFunction {
                                                     JsonQueryCompiler compiler) {
 
     if (!rawArgs.isEmpty()) {
-      throw new IllegalArgumentException("min expects 0 arguments");
+      throw new IllegalArgumentException("max expects 0 arguments");
     }
 
     return value -> {
@@ -27,14 +28,14 @@ public final class MinFunction implements JsonQueryFunction {
         return new JsonPrimitive(0);
       }
 
-      Double min = null;
+      Double max = null;
       for (JsonElement e : value.getAsJsonArray()) {
         if (e.isJsonPrimitive() && e.getAsJsonPrimitive().isNumber()) {
           double v = e.getAsDouble();
-          min = (min == null) ? v : Math.min(min, v);
+          max = (max == null) ? v : Math.max(max, v);
         }
       }
-      return new JsonPrimitive(min == null ? 0 : min);
+      return new JsonPrimitive(max == null ? 0 : max);
     };
   }
 }

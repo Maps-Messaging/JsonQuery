@@ -1,4 +1,4 @@
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.numeric;
 
 public final class MultiplyFunction extends AbstractNumericBinaryFunction {
 
