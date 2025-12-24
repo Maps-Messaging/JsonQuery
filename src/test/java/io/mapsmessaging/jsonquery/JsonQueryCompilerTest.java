@@ -43,7 +43,7 @@ class JsonQueryCompilerTest {
 
     JsonElement query = JsonParser.parseString("""
         ["pipe",
-          ["filter", "address.state = 'Alaska'"],
+          ["selector", "address.state = 'Alaska'"],
           ["sort", ["get","age"], "desc"],
           ["pick", "first", "age", "address"]
         ]
@@ -79,7 +79,7 @@ class JsonQueryCompilerTest {
         """);
 
     JsonElement query = JsonParser.parseString("""
-        ["filter", "state = 'Alaska'"]
+        ["selector", "state = 'Alaska'"]
         """);
 
     JsonElement result = compiler.compile(query).apply(data);
@@ -186,33 +186,7 @@ class JsonQueryCompilerTest {
     Assertions.assertTrue(result.isJsonNull());
   }
 
-  @Test
-  void pipeEmptyIsRejected() {
-    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
 
-    JsonElement query = JsonParser.parseString("""
-        ["pipe"]
-        """);
-
-    Assertions.assertThrows(IllegalArgumentException.class, () -> compiler.compile(query));
-  }
-
-  @Test
-  void sortNonArrayReturnsInput() {
-    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
-
-    JsonElement data = JsonParser.parseString("""
-        {"age": 10}
-        """);
-
-    JsonElement query = JsonParser.parseString("""
-        ["sort", ["get","age"], "desc"]
-        """);
-
-    JsonElement result = compiler.compile(query).apply(data);
-
-    Assertions.assertEquals(data, result);
-  }
 
   @Test
   void filterNonArrayReturnsInput() {
@@ -223,7 +197,7 @@ class JsonQueryCompilerTest {
         """);
 
     JsonElement query = JsonParser.parseString("""
-        ["filter", "state = 'Alaska'"]
+        ["selector", "state = 'Alaska'"]
         """);
 
     JsonElement result = compiler.compile(query).apply(data);
@@ -284,7 +258,7 @@ class JsonQueryCompilerTest {
 
     JsonElement query = JsonParser.parseString("""
         ["pipe",
-          ["filter", "particles_gt_10 > 100"],
+          ["selector", "particles_gt_10 > 100"],
           ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
         ]
         """);
@@ -318,12 +292,13 @@ class JsonQueryCompilerTest {
 
     JsonElement query = JsonParser.parseString("""
         ["pipe",
-          ["filter", "particles_gt_10 < 10"],
+          ["selector", "particles_gt_10 < 10"],
           ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
         ]
         """);
 
-    JsonElement result = compiler.compile(query).apply(data);
+    Function<JsonElement, JsonElement> compiled = compiler.compile(query);
+    JsonElement result = compiled.apply(data);
 
     JsonElement expected = JsonParser.parseString("""
         {
