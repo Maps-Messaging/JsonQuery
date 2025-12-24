@@ -17,22 +17,57 @@
  *  limitations under the License.
  */
 
-package io.mapsmessaging.jsonquery.functions.numeric;
+package io.mapsmessaging.jsonquery.parser;
 
-public final class PowFunction extends AbstractNumericBinaryFunction {
+import java.util.Objects;
 
-  @Override
-  public String getName() {
-    return "pow";
+public record Token(Type type, String text, Object value, int position) {
+
+  public Token(Type type, String text, Object value, int position) {
+    this.type = Objects.requireNonNull(type, "type");
+    this.text = text;
+    this.value = value;
+    this.position = position;
   }
 
-  @Override
-  protected double apply(double left, double right) {
-    return Math.pow(left, right);
-  }
+  public enum Type {
+    EOF,
 
-  @Override
-  protected String symbol() {
-    return "^";
+    IDENT,
+    STRING,
+    NUMBER,
+
+    DOT,
+    COMMA,
+    COLON,
+    LPAREN,
+    RPAREN,
+    LBRACKET,
+    RBRACKET,
+    LBRACE,
+    RBRACE,
+    PIPE,
+
+    PLUS,
+    MINUS,
+    STAR,
+    SLASH,
+    PERCENT,
+    CARET,
+
+    EQEQ,
+    NEQ,
+    LT,
+    LTE,
+    GT,
+    GTE,
+
+    AND,
+    OR,
+    IN,
+    NOT,
+    NULL,
+    TRUE,
+    FALSE
   }
 }

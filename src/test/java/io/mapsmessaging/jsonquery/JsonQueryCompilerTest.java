@@ -1,6 +1,24 @@
+/*
+ *
+ *  Copyright [ 2020 - 2024 ] Matthew Buckton
+ *  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+ *
+ *  Licensed under the Apache License, Version 2.0 with the Commons Clause
+ *  (the "License"); you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://commonsclause.com/
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.mapsmessaging.jsonquery;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Assertions;
@@ -247,29 +265,29 @@ class JsonQueryCompilerTest {
     JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
 
     JsonElement data = JsonParser.parseString("""
-      {
-        "pm_1_0": 0,
-        "timestamp": "2025-12-23T05:37:11.757186593Z",
-        "pm_2_5": 0,
-        "pm_10": 0,
-        "pm_1_0_atm": 0,
-        "pm_2_5_atm": 0,
-        "pm_10_atm": 0,
-        "particles_gt_3": 108,
-        "particles_gt_5": 36,
-        "particles_gt_10": 4,
-        "particles_gt_25": 2,
-        "particles_gt_50": 2,
-        "particles_gt_100": 0
-      }
-      """);
+        {
+          "pm_1_0": 0,
+          "timestamp": "2025-12-23T05:37:11.757186593Z",
+          "pm_2_5": 0,
+          "pm_10": 0,
+          "pm_1_0_atm": 0,
+          "pm_2_5_atm": 0,
+          "pm_10_atm": 0,
+          "particles_gt_3": 108,
+          "particles_gt_5": 36,
+          "particles_gt_10": 4,
+          "particles_gt_25": 2,
+          "particles_gt_50": 2,
+          "particles_gt_100": 0
+        }
+        """);
 
     JsonElement query = JsonParser.parseString("""
-      ["pipe",
-        ["filter", "particles_gt_10 > 100"],
-        ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
-      ]
-      """);
+        ["pipe",
+          ["filter", "particles_gt_10 > 100"],
+          ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
+        ]
+        """);
 
     JsonElement result = compiler.compile(query).apply(data);
 
@@ -281,39 +299,39 @@ class JsonQueryCompilerTest {
     JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
 
     JsonElement data = JsonParser.parseString("""
-      {
-        "pm_1_0": 0,
-        "timestamp": "2025-12-23T05:37:11.757186593Z",
-        "pm_2_5": 0,
-        "pm_10": 0,
-        "pm_1_0_atm": 0,
-        "pm_2_5_atm": 0,
-        "pm_10_atm": 0,
-        "particles_gt_3": 108,
-        "particles_gt_5": 36,
-        "particles_gt_10": 4,
-        "particles_gt_25": 2,
-        "particles_gt_50": 2,
-        "particles_gt_100": 0
-      }
-      """);
+        {
+          "pm_1_0": 0,
+          "timestamp": "2025-12-23T05:37:11.757186593Z",
+          "pm_2_5": 0,
+          "pm_10": 0,
+          "pm_1_0_atm": 0,
+          "pm_2_5_atm": 0,
+          "pm_10_atm": 0,
+          "particles_gt_3": 108,
+          "particles_gt_5": 36,
+          "particles_gt_10": 4,
+          "particles_gt_25": 2,
+          "particles_gt_50": 2,
+          "particles_gt_100": 0
+        }
+        """);
 
     JsonElement query = JsonParser.parseString("""
-      ["pipe",
-        ["filter", "particles_gt_10 < 10"],
-        ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
-      ]
-      """);
+        ["pipe",
+          ["filter", "particles_gt_10 < 10"],
+          ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
+        ]
+        """);
 
     JsonElement result = compiler.compile(query).apply(data);
 
     JsonElement expected = JsonParser.parseString("""
-      {
-        "timestamp": "2025-12-23T05:37:11.757186593Z",
-        "particles_gt_10": 4,
-        "pm_2_5": 0
-      }
-      """);
+        {
+          "timestamp": "2025-12-23T05:37:11.757186593Z",
+          "particles_gt_10": 4,
+          "pm_2_5": 0
+        }
+        """);
 
     Assertions.assertEquals(expected, result);
   }

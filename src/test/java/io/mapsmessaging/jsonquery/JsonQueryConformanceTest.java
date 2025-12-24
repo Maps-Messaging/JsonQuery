@@ -1,11 +1,25 @@
+/*
+ *
+ *  Copyright [ 2020 - 2024 ] Matthew Buckton
+ *  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+ *
+ *  Licensed under the Apache License, Version 2.0 with the Commons Clause
+ *  (the "License"); you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://commonsclause.com/
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.mapsmessaging.jsonquery;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 
@@ -20,17 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class JsonQueryConformanceTest {
 
-  /**
-   * Implement this with your existing compiler/evaluator.
-   * It should execute the JSON "query" against "input" and return a JSON result.
-   */
-  @FunctionalInterface
-  public interface JsonQueryEngine {
-    JsonElement execute(JsonElement input, JsonElement query) throws Exception;
-  }
-
   private static final Gson GSON = new GsonBuilder().serializeNulls().create();
-
   /**
    * Wire your engine here.
    */
@@ -39,56 +43,10 @@ public class JsonQueryConformanceTest {
       JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
       Function<JsonElement, JsonElement> compiled = compiler.compile(query);
       return compiled.apply(input);
-    }
-    catch(Throwable t){
+    } catch (Throwable t) {
       throw t;
     }
   };
-
-  @TestFactory
-  public List<DynamicTest> conformanceSuite() {
-    JsonObject suite = loadSuiteJson("/jsonquery/compile.test.json");
-
-    String version = getString(suite, "version", "unknown");
-    JsonArray groups = suite.getAsJsonArray("groups");
-
-    List<DynamicTest> tests = new ArrayList<>();
-    for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
-      JsonObject group = groups.get(groupIndex).getAsJsonObject();
-
-      String category = getString(group, "category", "unknown");
-      String description = getString(group, "description", "");
-      JsonArray groupTests = group.getAsJsonArray("tests");
-
-      for (int testIndex = 0; testIndex < groupTests.size(); testIndex++) {
-        JsonObject test = groupTests.get(testIndex).getAsJsonObject();
-        String name = "v" + version + " :: " + category + " :: " + description + " :: #" + (testIndex + 1);
-        tests.add(DynamicTest.dynamicTest(name, () -> runOne(test)));
-      }
-    }
-    return tests;
-  }
-
-  private void runOne(JsonObject test) throws Exception {
-    JsonElement input = test.has("input") ? test.get("input") : JsonNull.INSTANCE;
-    JsonElement query = test.has("query") ? test.get("query") : JsonNull.INSTANCE;
-
-    if (test.has("throws")) {
-      String expected = test.get("throws").getAsString();
-      Exception exception = assertThrows(Exception.class, () -> engine.execute(input, query));
-      String message = exception.getMessage() == null ? "" : exception.getMessage();
-      assertTrue(
-          message.contains(expected),
-          "Expected error to contain: [" + expected + "] but was: [" + message + "]");
-      return;
-    }
-
-    assertTrue(test.has("output"), "Test missing both 'output' and 'throws'");
-    JsonElement expectedOutput = normalizeNull(test.get("output"));
-    JsonElement actual = engine.execute(input, query);
-    JsonElement actualNormalized = normalizeNull(actual);
-    assertJsonEquals(expectedOutput, actualNormalized, 1e-9);
-  }
 
   private static JsonObject loadSuiteJson(String resourcePath) {
     InputStream stream = JsonQueryConformanceTest.class.getResourceAsStream(resourcePath);
@@ -172,6 +130,60 @@ public class JsonQueryConformanceTest {
     }
 
     fail("Type mismatch. expected=" + expected + " actual=" + actual);
+  }
+
+  @TestFactory
+  public List<DynamicTest> conformanceSuite() {
+    JsonObject suite = loadSuiteJson("/jsonquery/compile.test.json");
+
+    String version = getString(suite, "version", "unknown");
+    JsonArray groups = suite.getAsJsonArray("groups");
+
+    List<DynamicTest> tests = new ArrayList<>();
+    for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
+      JsonObject group = groups.get(groupIndex).getAsJsonObject();
+
+      String category = getString(group, "category", "unknown");
+      String description = getString(group, "description", "");
+      JsonArray groupTests = group.getAsJsonArray("tests");
+
+      for (int testIndex = 0; testIndex < groupTests.size(); testIndex++) {
+        JsonObject test = groupTests.get(testIndex).getAsJsonObject();
+        String name = "v" + version + " :: " + category + " :: " + description + " :: #" + (testIndex + 1);
+        tests.add(DynamicTest.dynamicTest(name, () -> runOne(test)));
+      }
+    }
+    return tests;
+  }
+
+  private void runOne(JsonObject test) throws Exception {
+    JsonElement input = test.has("input") ? test.get("input") : JsonNull.INSTANCE;
+    JsonElement query = test.has("query") ? test.get("query") : JsonNull.INSTANCE;
+
+    if (test.has("throws")) {
+      String expected = test.get("throws").getAsString();
+      Exception exception = assertThrows(Exception.class, () -> engine.execute(input, query));
+      String message = exception.getMessage() == null ? "" : exception.getMessage();
+      assertTrue(
+          message.contains(expected),
+          "Expected error to contain: [" + expected + "] but was: [" + message + "]");
+      return;
+    }
+
+    assertTrue(test.has("output"), "Test missing both 'output' and 'throws'");
+    JsonElement expectedOutput = normalizeNull(test.get("output"));
+    JsonElement actual = engine.execute(input, query);
+    JsonElement actualNormalized = normalizeNull(actual);
+    assertJsonEquals(expectedOutput, actualNormalized, 1e-9);
+  }
+
+  /**
+   * Implement this with your existing compiler/evaluator.
+   * It should execute the JSON "query" against "input" and return a JSON result.
+   */
+  @FunctionalInterface
+  public interface JsonQueryEngine {
+    JsonElement execute(JsonElement input, JsonElement query) throws Exception;
   }
 }
 

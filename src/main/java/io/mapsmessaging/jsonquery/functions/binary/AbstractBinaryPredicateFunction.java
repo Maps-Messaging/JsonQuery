@@ -1,7 +1,25 @@
+/*
+ *
+ *  Copyright [ 2020 - 2024 ] Matthew Buckton
+ *  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+ *
+ *  Licensed under the Apache License, Version 2.0 with the Commons Clause
+ *  (the "License"); you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://commonsclause.com/
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.mapsmessaging.jsonquery.functions.binary;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
@@ -11,6 +29,40 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 public abstract class AbstractBinaryPredicateFunction implements JsonQueryFunction {
+
+  protected static boolean isNumber(JsonElement value) {
+    return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber();
+  }
+
+  protected static boolean isString(JsonElement value) {
+    return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
+  }
+
+  protected static boolean isBoolean(JsonElement value) {
+    return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
+  }
+
+  protected static int compare(JsonElement leftValue, JsonElement rightValue) {
+    if (isNumber(leftValue) && isNumber(rightValue)) {
+      double leftNumber = leftValue.getAsDouble();
+      double rightNumber = rightValue.getAsDouble();
+      return Double.compare(leftNumber, rightNumber);
+    }
+
+    if (isString(leftValue) && isString(rightValue)) {
+      String leftString = leftValue.getAsString();
+      String rightString = rightValue.getAsString();
+      return leftString.compareTo(rightString);
+    }
+
+    if (isBoolean(leftValue) && isBoolean(rightValue)) {
+      boolean leftBoolean = leftValue.getAsBoolean();
+      boolean rightBoolean = rightValue.getAsBoolean();
+      return Boolean.compare(leftBoolean, rightBoolean);
+    }
+
+    return 0;
+  }
 
   protected abstract BiPredicate<JsonElement, JsonElement> predicate();
 
@@ -45,39 +97,5 @@ public abstract class AbstractBinaryPredicateFunction implements JsonQueryFuncti
 
   protected String functionName() {
     return getClass().getSimpleName();
-  }
-
-  protected static boolean isNumber(JsonElement value) {
-    return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber();
-  }
-
-  protected static boolean isString(JsonElement value) {
-    return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
-  }
-
-  protected static boolean isBoolean(JsonElement value) {
-    return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
-  }
-
-  protected static int compare(JsonElement leftValue, JsonElement rightValue) {
-    if (isNumber(leftValue) && isNumber(rightValue)) {
-      double leftNumber = leftValue.getAsDouble();
-      double rightNumber = rightValue.getAsDouble();
-      return Double.compare(leftNumber, rightNumber);
-    }
-
-    if (isString(leftValue) && isString(rightValue)) {
-      String leftString = leftValue.getAsString();
-      String rightString = rightValue.getAsString();
-      return leftString.compareTo(rightString);
-    }
-
-    if (isBoolean(leftValue) && isBoolean(rightValue)) {
-      boolean leftBoolean = leftValue.getAsBoolean();
-      boolean rightBoolean = rightValue.getAsBoolean();
-      return Boolean.compare(leftBoolean, rightBoolean);
-    }
-
-    return 0;
   }
 }

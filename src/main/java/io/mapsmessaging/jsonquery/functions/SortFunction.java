@@ -1,19 +1,168 @@
+/*
+ *
+ *  Copyright [ 2020 - 2024 ] Matthew Buckton
+ *  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+ *
+ *  Licensed under the Apache License, Version 2.0 with the Commons Clause
+ *  (the "License"); you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://commonsclause.com/
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 public final class SortFunction extends AbstractFunction implements JsonQueryFunction {
+
+  private static JsonElement safe(JsonElement element) {
+    return element == null ? JsonNull.INSTANCE : element;
+  }
+
+  private static boolean isDirection(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return false;
+    }
+    if (!element.isJsonPrimitive()) {
+      return false;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    if (!primitive.isString()) {
+      return false;
+    }
+    String value = primitive.getAsString();
+    return "asc".equalsIgnoreCase(value) || "desc".equalsIgnoreCase(value);
+  }
+
+  private static boolean isDesc(String value) {
+    return "desc".equalsIgnoreCase(value);
+  }
+
+  /**
+   * Bucketed ordering:
+   * null < boolean < number < string < (array/object/other non-scalar bucket)
+   * <p>
+   * Non-scalars are not mutually comparable -> return 0 when both are non-scalar,
+   * so their relative order is preserved (stable sort).
+   */
+  private static int compareJson(JsonElement left, JsonElement right) {
+    left = safe(left);
+    right = safe(right);
+
+    int leftRank = bucketRank(left);
+    int rightRank = bucketRank(right);
+
+    if (leftRank != rightRank) {
+      return Integer.compare(leftRank, rightRank);
+    }
+
+    // Same bucket.
+    // If both are non-scalar bucket, keep input order.
+    if (leftRank == 4) {
+      return 0;
+    }
+
+    // Scalar comparison inside bucket 0..3
+    if (left.isJsonNull()) {
+      return 0;
+    }
+
+    JsonPrimitive lp = left.getAsJsonPrimitive();
+    JsonPrimitive rp = right.getAsJsonPrimitive();
+
+    if (lp.isBoolean()) {
+      return Boolean.compare(lp.getAsBoolean(), rp.getAsBoolean());
+    }
+    if (lp.isNumber()) {
+      return Double.compare(lp.getAsDouble(), rp.getAsDouble());
+    }
+    return lp.getAsString().compareTo(rp.getAsString());
+  }
+
+  // 0..3 = scalars, 4 = non-scalar bucket (arrays/objects/etc)
+  private static int bucketRank(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return 0;
+    }
+    if (!element.isJsonPrimitive()) {
+      return 4; // array/object -> shove to end
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    if (primitive.isBoolean()) {
+      return 1;
+    }
+    if (primitive.isNumber()) {
+      return 2;
+    }
+    if (primitive.isString()) {
+      return 3;
+    }
+    return 4;
+  }
+
+  // Returns 0..3 for scalars, -1 for arrays/objects/other weirdness.
+  private static int scalarRank(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return 0;
+    }
+    if (!element.isJsonPrimitive()) {
+      return -1;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    if (primitive.isBoolean()) {
+      return 1;
+    }
+    if (primitive.isNumber()) {
+      return 2;
+    }
+    if (primitive.isString()) {
+      return 3;
+    }
+    return -1;
+  }
+
+  private static int typeRank(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return 0;
+    }
+    if (element.isJsonPrimitive()) {
+      JsonPrimitive primitive = element.getAsJsonPrimitive();
+      if (primitive.isBoolean()) {
+        return 1;
+      }
+      if (primitive.isNumber()) {
+        return 2;
+      }
+      if (primitive.isString()) {
+        return 3;
+      }
+      return 3;
+    }
+    if (element.isJsonArray()) {
+      return 4;
+    }
+    if (element.isJsonObject()) {
+      return 5;
+    }
+    return 6;
+  }
 
   @Override
   public String getName() {
@@ -80,139 +229,5 @@ public final class SortFunction extends AbstractFunction implements JsonQueryFun
       }
       return out;
     };
-  }
-
-  private static JsonElement safe(JsonElement element) {
-    return element == null ? JsonNull.INSTANCE : element;
-  }
-
-  private static boolean isDirection(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
-      return false;
-    }
-    if (!element.isJsonPrimitive()) {
-      return false;
-    }
-    JsonPrimitive primitive = element.getAsJsonPrimitive();
-    if (!primitive.isString()) {
-      return false;
-    }
-    String value = primitive.getAsString();
-    return "asc".equalsIgnoreCase(value) || "desc".equalsIgnoreCase(value);
-  }
-
-  private static boolean isDesc(String value) {
-    return "desc".equalsIgnoreCase(value);
-  }
-
-  /**
-   * Bucketed ordering:
-   * null < boolean < number < string < (array/object/other non-scalar bucket)
-   *
-   * Non-scalars are not mutually comparable -> return 0 when both are non-scalar,
-   * so their relative order is preserved (stable sort).
-   */
-  private static int compareJson(JsonElement left, JsonElement right) {
-    left = safe(left);
-    right = safe(right);
-
-    int leftRank = bucketRank(left);
-    int rightRank = bucketRank(right);
-
-    if (leftRank != rightRank) {
-      return Integer.compare(leftRank, rightRank);
-    }
-
-    // Same bucket.
-    // If both are non-scalar bucket, keep input order.
-    if (leftRank == 4) {
-      return 0;
-    }
-
-    // Scalar comparison inside bucket 0..3
-    if (left.isJsonNull()) {
-      return 0;
-    }
-
-    JsonPrimitive lp = left.getAsJsonPrimitive();
-    JsonPrimitive rp = right.getAsJsonPrimitive();
-
-    if (lp.isBoolean()) {
-      return Boolean.compare(lp.getAsBoolean(), rp.getAsBoolean());
-    }
-    if (lp.isNumber()) {
-      return Double.compare(lp.getAsDouble(), rp.getAsDouble());
-    }
-    return lp.getAsString().compareTo(rp.getAsString());
-  }
-
-  // 0..3 = scalars, 4 = non-scalar bucket (arrays/objects/etc)
-  private static int bucketRank(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
-      return 0;
-    }
-    if (!element.isJsonPrimitive()) {
-      return 4; // array/object -> shove to end
-    }
-    JsonPrimitive primitive = element.getAsJsonPrimitive();
-    if (primitive.isBoolean()) {
-      return 1;
-    }
-    if (primitive.isNumber()) {
-      return 2;
-    }
-    if (primitive.isString()) {
-      return 3;
-    }
-    return 4;
-  }
-
-
-  // Returns 0..3 for scalars, -1 for arrays/objects/other weirdness.
-  private static int scalarRank(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
-      return 0;
-    }
-    if (!element.isJsonPrimitive()) {
-      return -1;
-    }
-    JsonPrimitive primitive = element.getAsJsonPrimitive();
-    if (primitive.isBoolean()) {
-      return 1;
-    }
-    if (primitive.isNumber()) {
-      return 2;
-    }
-    if (primitive.isString()) {
-      return 3;
-    }
-    return -1;
-  }
-
-
-  private static int typeRank(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
-      return 0;
-    }
-    if (element.isJsonPrimitive()) {
-      JsonPrimitive primitive = element.getAsJsonPrimitive();
-      if (primitive.isBoolean()) {
-        return 1;
-      }
-      if (primitive.isNumber()) {
-        return 2;
-      }
-      if (primitive.isString()) {
-        return 3;
-      }
-      return 3;
-    }
-    if (element.isJsonArray()) {
-      return 4;
-    }
-    if (element.isJsonObject()) {
-      return 5;
-    }
-    return 6;
   }
 }
