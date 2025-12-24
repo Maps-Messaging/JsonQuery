@@ -10,17 +10,17 @@ import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 import java.util.List;
 import java.util.function.Function;
 
-public final class MinFunction implements JsonQueryFunction {
+public final class ProdFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "min";
+    return "prod";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (!rawArgs.isEmpty()) {
-      throw new IllegalArgumentException("min expects 0 arguments");
+      throw new IllegalArgumentException("prod expects 0 arguments");
     }
 
     return data -> {
@@ -36,7 +36,9 @@ public final class MinFunction implements JsonQueryFunction {
         return JsonNull.INSTANCE;
       }
 
-      Double min = null;
+      double product = 1.0;
+      boolean seenNumber = false;
+
       for (JsonElement element : array) {
         if (element == null || element.isJsonNull()) {
           continue;
@@ -44,11 +46,18 @@ public final class MinFunction implements JsonQueryFunction {
         if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
           throw new IllegalArgumentException("Number expected");
         }
-        double value = element.getAsDouble();
-        min = (min == null) ? value : Math.min(min, value);
+        product *= element.getAsDouble();
+        seenNumber = true;
       }
 
-      return min == null ? JsonNull.INSTANCE : new JsonPrimitive(min);
+      if (!seenNumber) {
+        return JsonNull.INSTANCE;
+      }
+
+      if (product == Math.rint(product)) {
+        return new JsonPrimitive((long) product);
+      }
+      return new JsonPrimitive(product);
     };
   }
 }

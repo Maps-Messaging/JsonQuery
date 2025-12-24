@@ -22,10 +22,30 @@ public final class IfFunction extends AbstractFunction {
 
     return data -> {
       JsonElement conditionValue = condition.apply(data);
-      if (JsonQueryFunction.isTruthy(conditionValue)) {
+
+      boolean cond;
+      if (conditionValue == null || conditionValue.isJsonNull()) {
+        cond = false;
+      } else if (conditionValue.isJsonPrimitive()) {
+        if (conditionValue.getAsJsonPrimitive().isBoolean()) {
+          cond = conditionValue.getAsBoolean();
+        } else if (conditionValue.getAsJsonPrimitive().isNumber()) {
+          cond = conditionValue.getAsDouble() != 0.0;
+        } else {
+          // strings (including "") count as true
+          cond = true;
+        }
+      } else {
+        // arrays/objects count as true
+        cond = true;
+      }
+
+      if (cond) {
         return thenExpr.apply(data);
       }
       return elseExpr.apply(data);
     };
+
+
   }
 }

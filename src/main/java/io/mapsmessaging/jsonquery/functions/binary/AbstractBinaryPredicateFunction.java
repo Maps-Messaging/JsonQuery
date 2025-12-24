@@ -28,8 +28,14 @@ public abstract class AbstractBinaryPredicateFunction implements JsonQueryFuncti
       JsonElement leftValue = leftExpression.apply(data);
       JsonElement rightValue = rightExpression.apply(data);
 
-      if (leftValue == null || leftValue.isJsonNull() || rightValue == null || rightValue.isJsonNull()) {
-        return JsonNull.INSTANCE;
+      boolean leftIsNull = (leftValue == null || leftValue.isJsonNull());
+      boolean rightIsNull = (rightValue == null || rightValue.isJsonNull());
+
+      if (leftIsNull && rightIsNull) {
+        return new JsonPrimitive(true);
+      }
+      if (leftIsNull || rightIsNull) {
+        return new JsonPrimitive(false);
       }
 
       boolean result = binaryPredicate.test(leftValue, rightValue);

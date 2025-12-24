@@ -24,7 +24,7 @@ public final class JoinFunction implements JsonQueryFunction {
 
     final String separator;
     if (rawArgs.isEmpty()) {
-      separator = ",";
+      separator = "";
     } else {
       JsonElement arg = rawArgs.get(0);
       if (!arg.isJsonPrimitive() || !arg.getAsJsonPrimitive().isString()) {

@@ -36,8 +36,8 @@ io.mapsmessaging.jsonquery.functions.MapFunction
 io.mapsmessaging.jsonquery.functions.MapKeysFunction
 io.mapsmessaging.jsonquery.functions.MapObjectFunction
 io.mapsmessaging.jsonquery.functions.MapValuesFunction
-io.mapsmessaging.jsonquery.functions.MatchAllFunction
-io.mapsmessaging.jsonquery.functions.MatchFunction
+io.mapsmessaging.jsonquery.functions.matcher.MatchAllFunction
+io.mapsmessaging.jsonquery.functions.matcher.MatchFunction
 io.mapsmessaging.jsonquery.functions.numeric.MaxFunction
 io.mapsmessaging.jsonquery.functions.numeric.MinFunction
 io.mapsmessaging.jsonquery.functions.NotFunction
@@ -66,7 +66,8 @@ io.mapsmessaging.jsonquery.functions.numeric.MultiplyFunction
 io.mapsmessaging.jsonquery.functions.numeric.PowFunction
 io.mapsmessaging.jsonquery.functions.numeric.SubtractFunction
 io.mapsmessaging.jsonquery.functions.numeric.ModFunction
-
+io.mapsmessaging.jsonquery.functions.numeric.ProdFunction
+io.mapsmessaging.jsonquery.functions.numeric.AverageFunction
 
 io.mapsmessaging.jsonquery.functions.binary.EqFunction
 io.mapsmessaging.jsonquery.functions.binary.GteFunction

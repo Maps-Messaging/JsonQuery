@@ -56,7 +56,7 @@ public interface JsonQueryFunction {
     }
     return true;
   }
-
+  
   static JsonElement booleanValue(boolean value) {
     return new JsonPrimitive(value);
   }
@@ -96,4 +96,6 @@ public interface JsonQueryFunction {
     double value = asNumber(element, errorMessage);
     return (int) value;
   }
+
+
 }

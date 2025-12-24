@@ -42,8 +42,12 @@ public final class KeyByFunction implements JsonQueryFunction {
         if (key == null) {
           continue;
         }
+        if (keyed.has(key)) {
+          continue; // first wins
+        }
         keyed.add(key, element);
       }
+
 
       return keyed;
     };

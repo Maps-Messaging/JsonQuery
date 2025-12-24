@@ -10,17 +10,17 @@ import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 import java.util.List;
 import java.util.function.Function;
 
-public final class MinFunction implements JsonQueryFunction {
+public final class AverageFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "min";
+    return "average";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (!rawArgs.isEmpty()) {
-      throw new IllegalArgumentException("min expects 0 arguments");
+      throw new IllegalArgumentException("avg expects 0 arguments");
     }
 
     return data -> {
@@ -36,7 +36,9 @@ public final class MinFunction implements JsonQueryFunction {
         return JsonNull.INSTANCE;
       }
 
-      Double min = null;
+      double sum = 0.0;
+      long count = 0;
+
       for (JsonElement element : array) {
         if (element == null || element.isJsonNull()) {
           continue;
@@ -44,11 +46,20 @@ public final class MinFunction implements JsonQueryFunction {
         if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
           throw new IllegalArgumentException("Number expected");
         }
-        double value = element.getAsDouble();
-        min = (min == null) ? value : Math.min(min, value);
+        sum += element.getAsDouble();
+        count++;
       }
 
-      return min == null ? JsonNull.INSTANCE : new JsonPrimitive(min);
+      if (count == 0) {
+        return JsonNull.INSTANCE;
+      }
+
+      double avg = sum / (double) count;
+
+      if (avg == Math.rint(avg)) {
+        return new JsonPrimitive((long) avg);
+      }
+      return new JsonPrimitive(avg);
     };
   }
 }

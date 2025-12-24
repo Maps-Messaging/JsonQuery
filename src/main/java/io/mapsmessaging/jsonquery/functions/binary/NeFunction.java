@@ -1,33 +1,117 @@
 package io.mapsmessaging.jsonquery.functions.binary;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
+import java.util.List;
 import java.util.function.BiPredicate;
+import java.util.function.Function;
 
-public final class NeFunction extends AbstractBinaryPredicateFunction {
+import static io.mapsmessaging.jsonquery.functions.JsonQueryGson.isString;
+import static io.mapsmessaging.jsonquery.functions.binary.AbstractBinaryPredicateFunction.isBoolean;
+import static io.mapsmessaging.jsonquery.functions.binary.AbstractBinaryPredicateFunction.isNumber;
+
+public final class NeFunction implements JsonQueryFunction {
   @Override
   public String getName() {
     return "ne";
   }
 
   @Override
-  protected BiPredicate<JsonElement, JsonElement> predicate() {
-    return (leftValue, rightValue) -> {
+  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+    if (rawArgs.size() != 2) {
+      throw new IllegalArgumentException("ne expects 2 arguments");
+    }
+
+    Function<JsonElement, JsonElement> leftExpression = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> rightExpression = compiler.compile(rawArgs.get(1));
+
+    return data -> {
+      JsonElement leftValue = leftExpression.apply(data);
+      JsonElement rightValue = rightExpression.apply(data);
+
+      boolean leftIsNull = (leftValue == null || leftValue.isJsonNull());
+      boolean rightIsNull = (rightValue == null || rightValue.isJsonNull());
+
+      // ne(null, null) = false
+      if (leftIsNull && rightIsNull) {
+        return new JsonPrimitive(false);
+      }
+
+      // ne(null, x) = true, ne(x, null) = true
+      if (leftIsNull || rightIsNull) {
+        return new JsonPrimitive(true);
+      }
+
+      // Same-type primitives: normal inequality
       if (isNumber(leftValue) && isNumber(rightValue)) {
-        return Double.compare(leftValue.getAsDouble(), rightValue.getAsDouble()) != 0;
+        return new JsonPrimitive(Double.compare(leftValue.getAsDouble(), rightValue.getAsDouble()) != 0);
       }
       if (isString(leftValue) && isString(rightValue)) {
-        return !leftValue.getAsString().equals(rightValue.getAsString());
+        return new JsonPrimitive(!leftValue.getAsString().equals(rightValue.getAsString()));
       }
       if (isBoolean(leftValue) && isBoolean(rightValue)) {
-        return leftValue.getAsBoolean() != rightValue.getAsBoolean();
+        return new JsonPrimitive(leftValue.getAsBoolean() != rightValue.getAsBoolean());
       }
-      return false;
+
+      // For arrays/objects (and any other non-primitive combos):
+      return new JsonPrimitive(!deepEquals(leftValue, rightValue));
+
     };
   }
-  @Override
-  protected String functionName() {
-    return "ne";
+
+  private static boolean deepEquals(JsonElement left, JsonElement right) {
+    if (left == null || left.isJsonNull()) {
+      return right == null || right.isJsonNull();
+    }
+    if (right == null || right.isJsonNull()) {
+      return false;
+    }
+
+    if (left.isJsonPrimitive() && right.isJsonPrimitive()) {
+      if ((isNumber(left) && isNumber(right))
+          || (isString(left) && isString(right))
+          || (isBoolean(left) && isBoolean(right))) {
+        return AbstractBinaryPredicateFunction.compare(left, right) == 0;
+      }
+      return false;
+    }
+
+    if (left.isJsonArray() && right.isJsonArray()) {
+      var la = left.getAsJsonArray();
+      var ra = right.getAsJsonArray();
+      if (la.size() != ra.size()) {
+        return false;
+      }
+      for (int i = 0; i < la.size(); i++) {
+        if (!deepEquals(la.get(i), ra.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (left.isJsonObject() && right.isJsonObject()) {
+      var lo = left.getAsJsonObject();
+      var ro = right.getAsJsonObject();
+      if (lo.size() != ro.size()) {
+        return false;
+      }
+      for (var entry : lo.entrySet()) {
+        String key = entry.getKey();
+        if (!ro.has(key)) {
+          return false;
+        }
+        if (!deepEquals(entry.getValue(), ro.get(key))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return false;
   }
 
 }

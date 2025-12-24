@@ -24,49 +24,111 @@ public final class PickFunction implements JsonQueryFunction {
     }
 
     List<JsonElement> selectorElements = normalizeSelectors(rawArgs);
-    List<Function<JsonElement, JsonElement>> selectorFunctions = new ArrayList<>();
+
+    List<String> outputKeys = new ArrayList<>();
+    List<Function<JsonElement, JsonElement>> valueSelectors = new ArrayList<>();
+    List<Function<JsonElement, JsonElement>> dynamicKeySelectors = new ArrayList<>();
+
     for (JsonElement selectorElement : selectorElements) {
-      Function<JsonElement, JsonElement> selectorFunction = compiler.compile(selectorElement);
-      selectorFunctions.add(selectorFunction);
+      String outputKey = tryExtractLiteralGetLeafKey(selectorElement);
+      if (outputKey != null) {
+        outputKeys.add(outputKey);
+        valueSelectors.add(compiler.compile(selectorElement));
+      } else {
+        dynamicKeySelectors.add(compiler.compile(selectorElement));
+      }
     }
+
+    Function<JsonElement, JsonElement> pickOne = element -> {
+      if (element == null || element.isJsonNull() || !element.isJsonObject()) {
+        return JsonNull.INSTANCE;
+      }
+
+      JsonObject sourceObject = element.getAsJsonObject();
+      JsonObject resultObject = new JsonObject();
+
+      // literal get paths: key = leaf, value = selector result
+      for (int index = 0; index < outputKeys.size(); index++) {
+        String key = outputKeys.get(index);
+        JsonElement value = valueSelectors.get(index).apply(element);
+        if (value != null && !value.isJsonNull()) {
+          resultObject.add(key, value);
+        }
+      }
+
+      // dynamic keys: selector returns a string key to fetch from top-level
+      for (Function<JsonElement, JsonElement> selectorFunction : dynamicKeySelectors) {
+        JsonElement keyElement = selectorFunction.apply(element);
+        if (keyElement == null || keyElement.isJsonNull() || !keyElement.isJsonPrimitive()) {
+          continue;
+        }
+        JsonPrimitive primitive = keyElement.getAsJsonPrimitive();
+        if (!primitive.isString()) {
+          continue;
+        }
+        String key = primitive.getAsString();
+        JsonElement value = sourceObject.get(key);
+        if (value != null) {
+          resultObject.add(key, value);
+        }
+      }
+
+      return resultObject;
+    };
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
-      if (!data.isJsonObject()) {
-        return JsonNull.INSTANCE;
+
+      if (data.isJsonArray()) {
+        JsonArray in = data.getAsJsonArray();
+        JsonArray out = new JsonArray();
+        for (JsonElement element : in) {
+          out.add(pickOne.apply(element));
+        }
+        return out;
       }
 
-      JsonObject sourceObject = data.getAsJsonObject();
-      JsonObject resultObject = new JsonObject();
-
-      for (Function<JsonElement, JsonElement> selectorFunction : selectorFunctions) {
-        JsonElement keyElement = selectorFunction.apply(data);
-        if (keyElement == null || keyElement.isJsonNull()) {
-          continue;
-        }
-        if (!keyElement.isJsonPrimitive()) {
-          continue;
-        }
-
-        JsonPrimitive keyPrimitive = keyElement.getAsJsonPrimitive();
-        if (!keyPrimitive.isString()) {
-          continue;
-        }
-
-        String key = keyPrimitive.getAsString();
-        JsonElement value = sourceObject.get(key);
-        if (value == null) {
-          continue;
-        }
-
-        resultObject.add(key, value);
-      }
-
-      return resultObject;
+      return pickOne.apply(data);
     };
   }
+
+
+  private static String tryExtractLiteralGetLeafKey(JsonElement selectorElement) {
+    if (selectorElement == null || !selectorElement.isJsonArray()) {
+      return null;
+    }
+    JsonArray array = selectorElement.getAsJsonArray();
+    if (array.size() < 2) {
+      return null;
+    }
+
+    JsonElement op = array.get(0);
+    if (op == null || !op.isJsonPrimitive()) {
+      return null;
+    }
+    JsonPrimitive opPrim = op.getAsJsonPrimitive();
+    if (!opPrim.isString() || !"get".equals(opPrim.getAsString())) {
+      return null;
+    }
+
+    // all args must be string literals
+    for (int index = 1; index < array.size(); index++) {
+      JsonElement arg = array.get(index);
+      if (arg == null || !arg.isJsonPrimitive()) {
+        return null;
+      }
+      JsonPrimitive argPrim = arg.getAsJsonPrimitive();
+      if (!argPrim.isString()) {
+        return null;
+      }
+    }
+
+    // output key is the last path segment
+    return array.get(array.size() - 1).getAsString();
+  }
+
 
   private List<JsonElement> normalizeSelectors(List<JsonElement> rawArgs) {
     if (rawArgs.size() == 1 && rawArgs.get(0) != null && rawArgs.get(0).isJsonArray()) {

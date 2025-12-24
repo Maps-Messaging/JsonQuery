@@ -41,7 +41,6 @@ public class JsonQueryConformanceTest {
       return compiled.apply(input);
     }
     catch(Throwable t){
-     // t.printStackTrace();
       throw t;
     }
   };
@@ -63,10 +62,7 @@ public class JsonQueryConformanceTest {
 
       for (int testIndex = 0; testIndex < groupTests.size(); testIndex++) {
         JsonObject test = groupTests.get(testIndex).getAsJsonObject();
-
-        String name =
-            "v" + version + " :: " + category + " :: " + description + " :: #" + (testIndex + 1);
-
+        String name = "v" + version + " :: " + category + " :: " + description + " :: #" + (testIndex + 1);
         tests.add(DynamicTest.dynamicTest(name, () -> runOne(test)));
       }
     }
@@ -89,10 +85,8 @@ public class JsonQueryConformanceTest {
 
     assertTrue(test.has("output"), "Test missing both 'output' and 'throws'");
     JsonElement expectedOutput = normalizeNull(test.get("output"));
-
     JsonElement actual = engine.execute(input, query);
     JsonElement actualNormalized = normalizeNull(actual);
-
     assertJsonEquals(expectedOutput, actualNormalized, 1e-9);
   }
 

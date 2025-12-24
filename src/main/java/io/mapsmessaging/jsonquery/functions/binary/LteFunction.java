@@ -14,10 +14,15 @@ public final class LteFunction extends AbstractBinaryPredicateFunction {
   @Override
   protected BiPredicate<JsonElement, JsonElement> predicate() {
     return (leftValue, rightValue) -> {
-      Integer result = compare(leftValue, rightValue);
-      return result != null && result <= 0;
+      if ((isNumber(leftValue) && isNumber(rightValue))
+          || (isString(leftValue) && isString(rightValue))
+          || (isBoolean(leftValue) && isBoolean(rightValue))) {
+        return compare(leftValue, rightValue) <= 0;
+      }
+      return false;
     };
   }
+
 
   @Override
   protected String functionName() {

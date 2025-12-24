@@ -28,7 +28,7 @@ public final class SumFunction implements JsonQueryFunction {
       }
 
       if (!data.isJsonArray()) {
-        return JsonNull.INSTANCE;
+        throw new IllegalArgumentException("Array expected");
       }
 
       JsonArray array = data.getAsJsonArray();

@@ -22,13 +22,17 @@ public final class StringFunction extends AbstractFunction {
 
     return data -> {
       JsonElement value = arg.apply(data);
-      if (JsonQueryFunction.isNull(value)) {
-        return JsonNull.INSTANCE;
+
+      if (value == null || value.isJsonNull()) {
+        return new JsonPrimitive("null");
       }
+
       if (value.isJsonPrimitive()) {
         return new JsonPrimitive(value.getAsJsonPrimitive().getAsString());
       }
+
       return JsonNull.INSTANCE;
     };
+
   }
 }

@@ -69,11 +69,8 @@ public final class SubstringFunction implements JsonQueryFunction {
       int end = (endIndex == null) ? length : clamp(endIndex, 0, length);
 
       if (end < start) {
-        int tmp = start;
-        start = end;
-        end = tmp;
+        return new JsonPrimitive("");
       }
-
       return new JsonPrimitive(value.substring(start, end));
     };
   }
