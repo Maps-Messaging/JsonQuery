@@ -79,7 +79,6 @@ public final class JsonQueryCompiler {
       String functionName = fnNameElement.getAsString();
       JsonQueryFunction function = functionRegistry.get(functionName);
       if (function == null) {
-        System.err.println(functionName);
         throw new IllegalArgumentException("Unknown function \"" + functionName + "\"");
       }
 

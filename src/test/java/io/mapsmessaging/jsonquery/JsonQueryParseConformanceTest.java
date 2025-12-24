@@ -45,13 +45,9 @@ final class JsonQueryParseConformanceTest {
    * ["get","name"], ["pipe", ...], literals, etc.
    */
   private static JsonElement parseToAst(String input) {
-    System.err.println("Input:" + input);
     try {
-      JsonElement element = JsonQueryParser.parse(input);
-      System.err.println(element);
-      return element;
+      return JsonQueryParser.parse(input);
     } catch (Exception e) {
-      e.printStackTrace(System.err);
       throw new RuntimeException(e);
     }
   }
