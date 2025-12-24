@@ -20,36 +20,33 @@
 package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonPrimitive;
 
-public final class JsonQueryGson {
+public final class JsonQueryTruthiness {
 
-  private JsonQueryGson() {
+  private JsonQueryTruthiness() {
   }
 
-  public static boolean isString(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
+  public static boolean isTruthy(JsonElement value) {
+    if (value == null || value.isJsonNull()) {
       return false;
     }
-    if (!element.isJsonPrimitive()) {
-      return false;
+    if (value.isJsonPrimitive()) {
+      if (value.getAsJsonPrimitive().isBoolean()) {
+        return value.getAsBoolean();
+      }
+      if (value.getAsJsonPrimitive().isNumber()) {
+        return value.getAsDouble() != 0.0d;
+      }
+      if (value.getAsJsonPrimitive().isString()) {
+        return !value.getAsString().isEmpty();
+      }
     }
-    JsonPrimitive primitive = element.getAsJsonPrimitive();
-    return primitive.isString();
-  }
-
-  public static String requireString(JsonElement element, String message) {
-    if (!isString(element)) {
-      throw new IllegalArgumentException(message);
+    if (value.isJsonArray()) {
+      return value.getAsJsonArray().size() > 0;
     }
-    return element.getAsString();
-  }
-
-  public static JsonElement nullToJsonNull(JsonElement element) {
-    if (element == null) {
-      return JsonNull.INSTANCE;
+    if (value.isJsonObject()) {
+      return value.getAsJsonObject().size() > 0;
     }
-    return element;
+    return true;
   }
 }

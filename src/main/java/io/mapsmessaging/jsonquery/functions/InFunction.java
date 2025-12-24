@@ -21,44 +21,52 @@ package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class InFunction extends AbstractFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "in";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
-    }
-
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    requireArgCountExact(rawArgs, 2, "2 arguments: in(value, array)");
+    Function<JsonElement, JsonElement> valueExpr = compileArg(rawArgs.get(0), compiler);
+    Function<JsonElement, JsonElement> arrayExpr = compileArg(rawArgs.get(1), compiler);
 
     return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        return data;
-      }
+      JsonElement value = valueExpr.apply(data);
+      JsonElement arrayValue = arrayExpr.apply(data);
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      if (JsonQueryFunction.isNull(arrayValue)) {
+        return new JsonPrimitive(false);
+      }
+      if (!arrayValue.isJsonArray()) {
+        throw new IllegalArgumentException("Array expected");
       }
 
-      return outputArray;
+      JsonArray array = arrayValue.getAsJsonArray();
+      for (JsonElement element : array) {
+        if (element == null) {
+          continue;
+        }
+        if (value == null) {
+          if (element.isJsonNull()) {
+            return new JsonPrimitive(true);
+          }
+          continue;
+        }
+        if (value.equals(element)) {
+          return new JsonPrimitive(true);
+        }
+      }
+      return new JsonPrimitive(false);
     };
   }
 }

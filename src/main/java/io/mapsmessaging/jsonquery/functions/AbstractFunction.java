@@ -20,36 +20,30 @@
 package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public final class PipeFunction implements JsonQueryFunction {
+public abstract class AbstractFunction implements JsonQueryFunction {
+
   @Override
-  public String getName() {
-    return "pipe";
+  public abstract String getName();
+
+  protected final void requireArgCount(List<JsonElement> rawArgs, int min, int max, String usage) {
+    int size = rawArgs.size();
+    if (size < min || size > max) {
+      throw new IllegalArgumentException(getName() + " expects " + usage);
+    }
   }
 
-  @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.isEmpty()) {
-      return data -> data == null ? JsonNull.INSTANCE : data;
+  protected final void requireArgCountExact(List<JsonElement> rawArgs, int expected, String usage) {
+    if (rawArgs.size() != expected) {
+      throw new IllegalArgumentException(getName() + " expects " + usage);
     }
+  }
 
-    List<Function<JsonElement, JsonElement>> stages = new ArrayList<>(rawArgs.size());
-    for (JsonElement stageExpr : rawArgs) {
-      stages.add(compiler.compile(stageExpr));
-    }
-
-    return data -> {
-      JsonElement current = (data == null) ? JsonNull.INSTANCE : data;
-      for (Function<JsonElement, JsonElement> stage : stages) {
-        current = stage.apply(current);
-      }
-      return current;
-    };
+  protected final Function<JsonElement, JsonElement> compileArg(JsonElement rawArg, JsonQueryCompiler compiler) {
+    return JsonQueryFunction.compileArg(rawArg, compiler);
   }
 }

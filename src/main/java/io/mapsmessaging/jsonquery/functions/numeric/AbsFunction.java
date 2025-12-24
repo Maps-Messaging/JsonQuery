@@ -17,48 +17,53 @@
  *  limitations under the License.
  */
 
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.numeric;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class AbsFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "abs";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (rawArgs.size() > 1) {
+      throw new IllegalArgumentException("abs expects 0 or 1 arguments");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> expression =
+        rawArgs.isEmpty()
+            ? data -> data == null ? JsonNull.INSTANCE : data
+            : compiler.compile(rawArgs.get(0));
 
     return data -> {
-      if (data == null || data.isJsonNull()) {
+      JsonElement value = expression.apply(data);
+      if (value == null || value.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
-      if (!data.isJsonArray()) {
-        return data;
+      if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      double number = value.getAsDouble();
+      double abs = Math.abs(number);
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      // Preserve integer-ness when possible
+      if (Math.floor(abs) == abs) {
+        return new JsonPrimitive((long) abs);
       }
 
-      return outputArray;
+      return new JsonPrimitive(abs);
     };
   }
 }

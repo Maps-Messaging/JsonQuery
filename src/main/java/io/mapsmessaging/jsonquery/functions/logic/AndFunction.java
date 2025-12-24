@@ -17,48 +17,45 @@
  *  limitations under the License.
  */
 
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.logic;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.AbstractFunction;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class AndFunction extends AbstractFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "and";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (rawArgs.isEmpty()) {
+      return data -> (data == null ? com.google.gson.JsonNull.INSTANCE : data);
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    List<Function<JsonElement, JsonElement>> expressions = new ArrayList<>();
+    for (JsonElement arg : rawArgs) {
+      expressions.add(compileArg(arg, compiler));
+    }
 
     return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
+      for (Function<JsonElement, JsonElement> expr : expressions) {
+        JsonElement value = expr.apply(data);
+        if (!JsonQueryFunction.isTruthy(value)) {
+          return new JsonPrimitive(false);
+        }
       }
-      if (!data.isJsonArray()) {
-        return data;
-      }
-
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
-      }
-
-      return outputArray;
+      return new JsonPrimitive(true);
     };
   }
+
 }

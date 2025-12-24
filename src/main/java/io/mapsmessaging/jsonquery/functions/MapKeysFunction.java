@@ -19,46 +19,55 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class MapKeysFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "mapKeys";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+      throw new IllegalArgumentException("mapKeys expects 1 argument (key mapper expression)");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> keyMapper = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
-      if (!data.isJsonArray()) {
-        return data;
+      if (!data.isJsonObject()) {
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      JsonObject input = data.getAsJsonObject();
+      JsonObject output = new JsonObject();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      for (Map.Entry<String, JsonElement> entry : input.entrySet()) {
+        JsonElement mappedKeyElement = keyMapper.apply(new com.google.gson.JsonPrimitive(entry.getKey()));
+        if (mappedKeyElement == null || mappedKeyElement.isJsonNull()
+            || !mappedKeyElement.isJsonPrimitive()
+            || !mappedKeyElement.getAsJsonPrimitive().isString()) {
+          continue;
+        }
+
+        String mappedKey = mappedKeyElement.getAsString();
+        JsonElement value = entry.getValue() == null ? JsonNull.INSTANCE : entry.getValue();
+        output.add(mappedKey, value);
       }
 
-      return outputArray;
+      return output;
     };
   }
 }

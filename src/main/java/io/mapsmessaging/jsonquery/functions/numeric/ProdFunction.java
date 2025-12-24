@@ -17,48 +17,66 @@
  *  limitations under the License.
  */
 
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.numeric;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
+import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class ProdFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "prod";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (!rawArgs.isEmpty()) {
+      throw new IllegalArgumentException("prod expects 0 arguments");
     }
-
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        throw new IllegalArgumentException("Array expected");
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      JsonArray array = data.getAsJsonArray();
+      if (array.isEmpty()) {
+        return JsonNull.INSTANCE;
       }
 
-      return outputArray;
+      double product = 1.0;
+      boolean seenNumber = false;
+
+      for (JsonElement element : array) {
+        if (element == null || element.isJsonNull()) {
+          continue;
+        }
+        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+          throw new IllegalArgumentException("Number expected");
+        }
+        product *= element.getAsDouble();
+        seenNumber = true;
+      }
+
+      if (!seenNumber) {
+        return JsonNull.INSTANCE;
+      }
+
+      if (product == Math.rint(product)) {
+        return new JsonPrimitive((long) product);
+      }
+      return new JsonPrimitive(product);
     };
   }
 }

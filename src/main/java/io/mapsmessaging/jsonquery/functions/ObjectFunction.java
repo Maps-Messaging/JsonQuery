@@ -19,46 +19,50 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class ObjectFunction extends AbstractFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "object";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    requireArgCountExact(rawArgs, 1, "1 argument: object({key: expr, ...})");
+
+    JsonElement arg = rawArgs.get(0);
+    if (arg == null || arg.isJsonNull()) {
+      return data -> JsonNull.INSTANCE;
+    }
+    if (!arg.isJsonObject()) {
+      throw new IllegalArgumentException("Object expected");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    JsonObject template = arg.getAsJsonObject();
+
+    Map<String, Function<JsonElement, JsonElement>> compiledFields = new LinkedHashMap<>();
+    for (Map.Entry<String, JsonElement> entry : template.entrySet()) {
+      Function<JsonElement, JsonElement> valueExpr = compileArg(entry.getValue(), compiler);
+      compiledFields.put(entry.getKey(), valueExpr);
+    }
 
     return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
+      JsonObject out = new JsonObject();
+      for (Map.Entry<String, Function<JsonElement, JsonElement>> field : compiledFields.entrySet()) {
+        JsonElement value = field.getValue().apply(data);
+        out.add(field.getKey(), value == null ? JsonNull.INSTANCE : value);
       }
-      if (!data.isJsonArray()) {
-        return data;
-      }
-
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
-      }
-
-      return outputArray;
+      return out;
     };
   }
 }

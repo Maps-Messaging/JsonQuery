@@ -19,46 +19,47 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class MapValuesFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "mapValues";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
     if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+      throw new IllegalArgumentException("mapValues expects 1 argument (valueMapper)");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> valueMapper = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
-      if (!data.isJsonArray()) {
-        return data;
+      if (!data.isJsonObject()) {
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      JsonObject input = data.getAsJsonObject();
+      JsonObject output = new JsonObject();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      for (Map.Entry<String, JsonElement> entry : input.entrySet()) {
+        JsonElement mapped = valueMapper.apply(entry.getValue());
+        output.add(entry.getKey(), mapped == null ? JsonNull.INSTANCE : mapped);
       }
 
-      return outputArray;
+      return output;
     };
   }
 }

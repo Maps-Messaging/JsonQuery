@@ -24,41 +24,35 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class ArrayFunction extends AbstractFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "array";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (rawArgs == null || rawArgs.isEmpty()) {
+      return data -> new JsonArray();
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    List<Function<JsonElement, JsonElement>> compiled = new ArrayList<>(rawArgs.size());
+    for (JsonElement arg : rawArgs) {
+      compiled.add(compileArg(arg, compiler));
+    }
 
     return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
+      JsonArray out = new JsonArray();
+      for (Function<JsonElement, JsonElement> expr : compiled) {
+        JsonElement value = expr.apply(data);
+        out.add(value == null ? JsonNull.INSTANCE : value);
       }
-      if (!data.isJsonArray()) {
-        return data;
-      }
-
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
-      }
-
-      return outputArray;
+      return out;
     };
   }
 }

@@ -21,44 +21,51 @@ package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class SizeFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "size";
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
-    }
+  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs,
+                                                    JsonQueryCompiler compiler) {
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    if (!rawArgs.isEmpty()) {
+      throw new IllegalArgumentException("size expects 0 arguments");
+    }
 
     return data -> {
       if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        return data;
+        return new JsonPrimitive(0);
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      if (data.isJsonArray()) {
+        JsonArray array = data.getAsJsonArray();
+        return new JsonPrimitive(array.size());
       }
 
-      return outputArray;
+      if (data.isJsonObject()) {
+        JsonObject object = data.getAsJsonObject();
+        return new JsonPrimitive(object.size());
+      }
+
+      if (data.isJsonPrimitive()) {
+        JsonPrimitive primitive = data.getAsJsonPrimitive();
+        if (primitive.isString()) {
+          return new JsonPrimitive(primitive.getAsString().length());
+        }
+      }
+
+      return new JsonPrimitive(0);
     };
   }
 }

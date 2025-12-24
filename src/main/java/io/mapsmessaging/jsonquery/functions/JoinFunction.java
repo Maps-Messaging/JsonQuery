@@ -22,43 +22,64 @@ package io.mapsmessaging.jsonquery.functions;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class JoinFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "join";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (rawArgs.size() > 1) {
+      throw new IllegalArgumentException("join expects 0 or 1 arguments");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    final String separator;
+    if (rawArgs.isEmpty()) {
+      separator = "";
+    } else {
+      JsonElement arg = rawArgs.get(0);
+      if (!arg.isJsonPrimitive() || !arg.getAsJsonPrimitive().isString()) {
+        throw new IllegalArgumentException("join separator must be a string");
+      }
+      separator = arg.getAsString();
+    }
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      JsonArray array = data.getAsJsonArray();
+      StringBuilder sb = new StringBuilder();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      boolean first = true;
+      for (JsonElement element : array) {
+        if (!first) {
+          sb.append(separator);
+        }
+        first = false;
+
+        if (element == null || element.isJsonNull()) {
+          sb.append("null");
+        } else if (element.isJsonPrimitive()) {
+          sb.append(element.getAsJsonPrimitive().getAsString());
+        } else {
+          sb.append(element);
+        }
       }
 
-      return outputArray;
+      return new JsonPrimitive(sb.toString());
     };
   }
 }

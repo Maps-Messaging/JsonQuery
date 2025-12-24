@@ -27,38 +27,33 @@ import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
-
+public final class ReverseFunction implements JsonQueryFunction {
   @Override
   public String getName() {
-    return "map";
+    return "reverse";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (!rawArgs.isEmpty()) {
+      throw new IllegalArgumentException("reverse expects 0 arguments");
     }
-
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      JsonArray input = data.getAsJsonArray();
+      JsonArray output = new JsonArray();
+      for (int index = input.size() - 1; index >= 0; index--) {
+        JsonElement element = input.get(index);
+        output.add(element == null ? JsonNull.INSTANCE : element);
       }
-
-      return outputArray;
+      return output;
     };
   }
 }

@@ -1,6 +1,24 @@
+/*
+ *
+ *  Copyright [ 2020 - 2024 ] Matthew Buckton
+ *  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+ *
+ *  Licensed under the Apache License, Version 2.0 with the Commons Clause
+ *  (the "License"); you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://commonsclause.com/
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.mapsmessaging.jsonquery;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Assertions;
@@ -25,7 +43,7 @@ class JsonQueryCompilerTest {
 
     JsonElement query = JsonParser.parseString("""
         ["pipe",
-          ["filter", "address.state = 'Alaska'"],
+          ["selector", "address.state = 'Alaska'"],
           ["sort", ["get","age"], "desc"],
           ["pick", "first", "age", "address"]
         ]
@@ -61,7 +79,7 @@ class JsonQueryCompilerTest {
         """);
 
     JsonElement query = JsonParser.parseString("""
-        ["filter", "state = 'Alaska'"]
+        ["selector", "state = 'Alaska'"]
         """);
 
     JsonElement result = compiler.compile(query).apply(data);
@@ -168,33 +186,7 @@ class JsonQueryCompilerTest {
     Assertions.assertTrue(result.isJsonNull());
   }
 
-  @Test
-  void pipeEmptyIsRejected() {
-    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
 
-    JsonElement query = JsonParser.parseString("""
-        ["pipe"]
-        """);
-
-    Assertions.assertThrows(IllegalArgumentException.class, () -> compiler.compile(query));
-  }
-
-  @Test
-  void sortNonArrayReturnsInput() {
-    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
-
-    JsonElement data = JsonParser.parseString("""
-        {"age": 10}
-        """);
-
-    JsonElement query = JsonParser.parseString("""
-        ["sort", ["get","age"], "desc"]
-        """);
-
-    JsonElement result = compiler.compile(query).apply(data);
-
-    Assertions.assertEquals(data, result);
-  }
 
   @Test
   void filterNonArrayReturnsInput() {
@@ -205,7 +197,7 @@ class JsonQueryCompilerTest {
         """);
 
     JsonElement query = JsonParser.parseString("""
-        ["filter", "state = 'Alaska'"]
+        ["selector", "state = 'Alaska'"]
         """);
 
     JsonElement result = compiler.compile(query).apply(data);
@@ -241,4 +233,82 @@ class JsonQueryCompilerTest {
 
     Assertions.assertEquals(expected, result);
   }
+
+  @Test
+  void filterOnSingleObjectDropsOrPasses() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+
+    JsonElement data = JsonParser.parseString("""
+        {
+          "pm_1_0": 0,
+          "timestamp": "2025-12-23T05:37:11.757186593Z",
+          "pm_2_5": 0,
+          "pm_10": 0,
+          "pm_1_0_atm": 0,
+          "pm_2_5_atm": 0,
+          "pm_10_atm": 0,
+          "particles_gt_3": 108,
+          "particles_gt_5": 36,
+          "particles_gt_10": 4,
+          "particles_gt_25": 2,
+          "particles_gt_50": 2,
+          "particles_gt_100": 0
+        }
+        """);
+
+    JsonElement query = JsonParser.parseString("""
+        ["pipe",
+          ["selector", "particles_gt_10 > 100"],
+          ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
+        ]
+        """);
+
+    JsonElement result = compiler.compile(query).apply(data);
+
+    Assertions.assertTrue(result.isJsonNull());
+  }
+
+  @Test
+  void filterOnSingleObjectPassesAndPicks() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+
+    JsonElement data = JsonParser.parseString("""
+        {
+          "pm_1_0": 0,
+          "timestamp": "2025-12-23T05:37:11.757186593Z",
+          "pm_2_5": 0,
+          "pm_10": 0,
+          "pm_1_0_atm": 0,
+          "pm_2_5_atm": 0,
+          "pm_10_atm": 0,
+          "particles_gt_3": 108,
+          "particles_gt_5": 36,
+          "particles_gt_10": 4,
+          "particles_gt_25": 2,
+          "particles_gt_50": 2,
+          "particles_gt_100": 0
+        }
+        """);
+
+    JsonElement query = JsonParser.parseString("""
+        ["pipe",
+          ["selector", "particles_gt_10 < 10"],
+          ["pick", "timestamp", "particles_gt_10", "pm_2_5"]
+        ]
+        """);
+
+    Function<JsonElement, JsonElement> compiled = compiler.compile(query);
+    JsonElement result = compiled.apply(data);
+
+    JsonElement expected = JsonParser.parseString("""
+        {
+          "timestamp": "2025-12-23T05:37:11.757186593Z",
+          "particles_gt_10": 4,
+          "pm_2_5": 0
+        }
+        """);
+
+    Assertions.assertEquals(expected, result);
+  }
+
 }

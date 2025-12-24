@@ -2,7 +2,7 @@
 
 A **small, embeddable JSON query engine** for Java, built on **Gson** and designed for **high‑throughput systems** such as MAPS Messaging.
 
-This implementation is inspired by `jsonquerylang`, but is intentionally constrained:
+This implementation is inspired by [jsonquerylang](https://github.com/jsonquerylang/jsonquery), but is intentionally constrained:
 - No mutation
 - No scripting
 - No runtime eval

@@ -24,41 +24,47 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class UniqFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "uniq";
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
-    }
+  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs,
+                                                    JsonQueryCompiler compiler) {
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    if (!rawArgs.isEmpty()) {
+      throw new IllegalArgumentException("uniq expects 0 arguments");
+    }
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      JsonArray input = data.getAsJsonArray();
+      Set<JsonElement> seen = new LinkedHashSet<>();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      for (JsonElement element : input) {
+        seen.add(element);
       }
 
-      return outputArray;
+      JsonArray result = new JsonArray();
+      for (JsonElement element : seen) {
+        result.add(element);
+      }
+
+      return result;
     };
   }
 }

@@ -20,36 +20,25 @@
 package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
 import com.google.gson.JsonPrimitive;
+import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
-public final class JsonQueryGson {
+import java.util.List;
+import java.util.function.Function;
 
-  private JsonQueryGson() {
+public final class NotInFunction extends AbstractFunction {
+
+  @Override
+  public String getName() {
+    return "not in";
   }
 
-  public static boolean isString(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
-      return false;
-    }
-    if (!element.isJsonPrimitive()) {
-      return false;
-    }
-    JsonPrimitive primitive = element.getAsJsonPrimitive();
-    return primitive.isString();
-  }
-
-  public static String requireString(JsonElement element, String message) {
-    if (!isString(element)) {
-      throw new IllegalArgumentException(message);
-    }
-    return element.getAsString();
-  }
-
-  public static JsonElement nullToJsonNull(JsonElement element) {
-    if (element == null) {
-      return JsonNull.INSTANCE;
-    }
-    return element;
+  @Override
+  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+    Function<JsonElement, JsonElement> inFunction = new InFunction().compile(rawArgs, compiler);
+    return data -> {
+      JsonElement inValue = inFunction.apply(data);
+      return new JsonPrimitive(!JsonQueryFunction.isTruthy(inValue));
+    };
   }
 }

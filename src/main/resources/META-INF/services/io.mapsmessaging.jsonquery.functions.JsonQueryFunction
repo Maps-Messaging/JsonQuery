@@ -1,0 +1,77 @@
+#
+#
+#  Copyright [ 2020 - 2024 ] Matthew Buckton
+#  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+#
+#  Licensed under the Apache License, Version 2.0 with the Commons Clause
+#  (the "License"); you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at:
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#      https://commonsclause.com/
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+io.mapsmessaging.jsonquery.functions.numeric.AbsFunction
+io.mapsmessaging.jsonquery.functions.logic.AndFunction
+io.mapsmessaging.jsonquery.functions.ArrayFunction
+io.mapsmessaging.jsonquery.functions.ExistsFunction
+io.mapsmessaging.jsonquery.functions.FilterFunction
+io.mapsmessaging.jsonquery.functions.FilterSelectorFunction
+io.mapsmessaging.jsonquery.functions.FlattenFunction
+io.mapsmessaging.jsonquery.functions.GetFunction
+io.mapsmessaging.jsonquery.functions.GroupByFunction
+io.mapsmessaging.jsonquery.functions.IfFunction
+io.mapsmessaging.jsonquery.functions.InFunction
+io.mapsmessaging.jsonquery.functions.JoinFunction
+io.mapsmessaging.jsonquery.functions.KeyByFunction
+io.mapsmessaging.jsonquery.functions.KeysFunction
+io.mapsmessaging.jsonquery.functions.LimitFunction
+io.mapsmessaging.jsonquery.functions.MapFunction
+io.mapsmessaging.jsonquery.functions.MapKeysFunction
+io.mapsmessaging.jsonquery.functions.MapObjectFunction
+io.mapsmessaging.jsonquery.functions.MapValuesFunction
+io.mapsmessaging.jsonquery.functions.matcher.MatchAllFunction
+io.mapsmessaging.jsonquery.functions.matcher.MatchFunction
+io.mapsmessaging.jsonquery.functions.numeric.MaxFunction
+io.mapsmessaging.jsonquery.functions.numeric.MinFunction
+io.mapsmessaging.jsonquery.functions.NotFunction
+io.mapsmessaging.jsonquery.functions.NotInFunction
+io.mapsmessaging.jsonquery.functions.NumberFunction
+io.mapsmessaging.jsonquery.functions.ObjectFunction
+io.mapsmessaging.jsonquery.functions.logic.OrFunction
+io.mapsmessaging.jsonquery.functions.PickFunction
+io.mapsmessaging.jsonquery.functions.PipeFunction
+io.mapsmessaging.jsonquery.functions.RegexFunction
+io.mapsmessaging.jsonquery.functions.ReverseFunction
+io.mapsmessaging.jsonquery.functions.RoundFunction
+io.mapsmessaging.jsonquery.functions.SizeFunction
+io.mapsmessaging.jsonquery.functions.SortFunction
+io.mapsmessaging.jsonquery.functions.SplitFunction
+io.mapsmessaging.jsonquery.functions.StringFunction
+io.mapsmessaging.jsonquery.functions.SubstringFunction
+io.mapsmessaging.jsonquery.functions.SumFunction
+io.mapsmessaging.jsonquery.functions.UniqByFunction
+io.mapsmessaging.jsonquery.functions.UniqFunction
+io.mapsmessaging.jsonquery.functions.ValuesFunction
+
+io.mapsmessaging.jsonquery.functions.numeric.AddFunction
+io.mapsmessaging.jsonquery.functions.numeric.DivideFunction
+io.mapsmessaging.jsonquery.functions.numeric.MultiplyFunction
+io.mapsmessaging.jsonquery.functions.numeric.PowFunction
+io.mapsmessaging.jsonquery.functions.numeric.SubtractFunction
+io.mapsmessaging.jsonquery.functions.numeric.ModFunction
+io.mapsmessaging.jsonquery.functions.numeric.ProdFunction
+io.mapsmessaging.jsonquery.functions.numeric.AverageFunction
+
+io.mapsmessaging.jsonquery.functions.binary.EqFunction
+io.mapsmessaging.jsonquery.functions.binary.GteFunction
+io.mapsmessaging.jsonquery.functions.binary.GtFunction
+io.mapsmessaging.jsonquery.functions.binary.LteFunction
+io.mapsmessaging.jsonquery.functions.binary.LtFunction
+io.mapsmessaging.jsonquery.functions.binary.NeFunction

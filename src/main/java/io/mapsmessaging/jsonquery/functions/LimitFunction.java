@@ -22,43 +22,61 @@ package io.mapsmessaging.jsonquery.functions;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class LimitFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "limit";
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs,
+                                                    JsonQueryCompiler compiler) {
+
     if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+      throw new IllegalArgumentException("limit expects 1 argument (count)");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    JsonElement rawCount = rawArgs.get(0);
+    if (rawCount == null || rawCount.isJsonNull() || !rawCount.isJsonPrimitive()) {
+      throw new IllegalArgumentException("limit expects numeric count");
+    }
+
+    JsonPrimitive primitive = rawCount.getAsJsonPrimitive();
+    if (!primitive.isNumber()) {
+      throw new IllegalArgumentException("limit expects numeric count");
+    }
+
+    int count = primitive.getAsInt();
+    if (count < 0) {
+      count = 0;
+    }
+
+    int finalCount = count;
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      JsonArray input = data.getAsJsonArray();
+      JsonArray result = new JsonArray();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      int endExclusive = Math.min(finalCount, input.size());
+      for (int index = 0; index < endExclusive; index++) {
+        result.add(input.get(index));
       }
 
-      return outputArray;
+      return result;
     };
   }
 }

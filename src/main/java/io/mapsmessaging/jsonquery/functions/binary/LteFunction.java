@@ -17,39 +17,35 @@
  *  limitations under the License.
  */
 
-package io.mapsmessaging.jsonquery.functions;
+package io.mapsmessaging.jsonquery.functions.binary;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonPrimitive;
 
-public final class JsonQueryGson {
+import java.util.function.BiPredicate;
 
-  private JsonQueryGson() {
+public final class LteFunction extends AbstractBinaryPredicateFunction {
+
+  @Override
+  public String getName() {
+    return "lte";
   }
 
-  public static boolean isString(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
+  @Override
+  protected BiPredicate<JsonElement, JsonElement> predicate() {
+    return (leftValue, rightValue) -> {
+      if ((isNumber(leftValue) && isNumber(rightValue))
+          || (isString(leftValue) && isString(rightValue))
+          || (isBoolean(leftValue) && isBoolean(rightValue))) {
+        return compare(leftValue, rightValue) <= 0;
+      }
       return false;
-    }
-    if (!element.isJsonPrimitive()) {
-      return false;
-    }
-    JsonPrimitive primitive = element.getAsJsonPrimitive();
-    return primitive.isString();
+    };
   }
 
-  public static String requireString(JsonElement element, String message) {
-    if (!isString(element)) {
-      throw new IllegalArgumentException(message);
-    }
-    return element.getAsString();
+
+  @Override
+  protected String functionName() {
+    return "lte";
   }
 
-  public static JsonElement nullToJsonNull(JsonElement element) {
-    if (element == null) {
-      return JsonNull.INSTANCE;
-    }
-    return element;
-  }
 }

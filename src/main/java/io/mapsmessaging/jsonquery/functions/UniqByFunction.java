@@ -24,41 +24,51 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class UniqByFunction implements JsonQueryFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "uniqBy";
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs,
+                                                    JsonQueryCompiler compiler) {
+
     if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+      throw new IllegalArgumentException("uniqBy expects 1 argument (keySelector)");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> keySelector = compiler.compile(rawArgs.get(0));
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        return JsonNull.INSTANCE;
       }
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
+      JsonArray input = data.getAsJsonArray();
+      JsonArray result = new JsonArray();
+      Set<JsonElement> seenKeys = new LinkedHashSet<>();
 
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      for (JsonElement element : input) {
+        JsonElement key = keySelector.apply(element);
+        if (key == null || key.isJsonNull()) {
+          continue;
+        }
+        if (seenKeys.add(key)) {
+          result.add(element);
+        }
       }
 
-      return outputArray;
+      return result;
     };
   }
 }

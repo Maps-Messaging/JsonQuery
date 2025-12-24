@@ -19,46 +19,43 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.function.Function;
 
-public final class MapFunction implements JsonQueryFunction {
+public final class RoundFunction extends AbstractFunction {
 
   @Override
   public String getName() {
-    return "map";
+    return "round";
   }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("map expects 1 argument: a query to apply to each element");
+    if (rawArgs.size() != 1 && rawArgs.size() != 2) {
+      throw new IllegalArgumentException("round expects 1 or 2 arguments: round(value, [digits])");
     }
 
-    Function<JsonElement, JsonElement> callback = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> valueExpr = compileArg(rawArgs.get(0), compiler);
+    Function<JsonElement, JsonElement> digitsExpr =
+        (rawArgs.size() == 2) ? compileArg(rawArgs.get(1), compiler) : null;
 
     return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        return data;
-      }
+      double value = JsonQueryFunction.asNumber(valueExpr.apply(data), "Number expected");
 
-      JsonArray inputArray = data.getAsJsonArray();
-      JsonArray outputArray = new JsonArray();
-
-      for (int i = 0; i < inputArray.size(); i++) {
-        JsonElement mapped = callback.apply(inputArray.get(i));
-        outputArray.add(JsonQueryGson.nullToJsonNull(mapped));
+      int digits = 0;
+      if (digitsExpr != null) {
+        digits = JsonQueryFunction.asInt(digitsExpr.apply(data), "Number expected");
       }
 
-      return outputArray;
+      BigDecimal bd = BigDecimal.valueOf(value);
+      bd = bd.setScale(digits, RoundingMode.HALF_UP);
+
+      return JsonQueryFunction.numberValue(bd.doubleValue());
     };
   }
 }

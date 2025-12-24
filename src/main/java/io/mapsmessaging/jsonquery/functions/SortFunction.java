@@ -1,3 +1,22 @@
+/*
+ *
+ *  Copyright [ 2020 - 2024 ] Matthew Buckton
+ *  Copyright [ 2024 - 2025 ] MapsMessaging B.V.
+ *
+ *  Licensed under the Apache License, Version 2.0 with the Commons Clause
+ *  (the "License"); you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://commonsclause.com/
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 package io.mapsmessaging.jsonquery.functions;
 
 import com.google.gson.JsonArray;
@@ -7,106 +26,208 @@ import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
 
-public final class SortFunction implements JsonQueryFunction {
+public final class SortFunction extends AbstractFunction implements JsonQueryFunction {
+
+  private static JsonElement safe(JsonElement element) {
+    return element == null ? JsonNull.INSTANCE : element;
+  }
+
+  private static boolean isDirection(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return false;
+    }
+    if (!element.isJsonPrimitive()) {
+      return false;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    if (!primitive.isString()) {
+      return false;
+    }
+    String value = primitive.getAsString();
+    return "asc".equalsIgnoreCase(value) || "desc".equalsIgnoreCase(value);
+  }
+
+  private static boolean isDesc(String value) {
+    return "desc".equalsIgnoreCase(value);
+  }
+
+  /**
+   * Bucketed ordering:
+   * null < boolean < number < string < (array/object/other non-scalar bucket)
+   * <p>
+   * Non-scalars are not mutually comparable -> return 0 when both are non-scalar,
+   * so their relative order is preserved (stable sort).
+   */
+  private static int compareJson(JsonElement left, JsonElement right) {
+    left = safe(left);
+    right = safe(right);
+
+    int leftRank = bucketRank(left);
+    int rightRank = bucketRank(right);
+
+    if (leftRank != rightRank) {
+      return Integer.compare(leftRank, rightRank);
+    }
+
+    // Same bucket.
+    // If both are non-scalar bucket, keep input order.
+    if (leftRank == 4) {
+      return 0;
+    }
+
+    // Scalar comparison inside bucket 0..3
+    if (left.isJsonNull()) {
+      return 0;
+    }
+
+    JsonPrimitive lp = left.getAsJsonPrimitive();
+    JsonPrimitive rp = right.getAsJsonPrimitive();
+
+    if (lp.isBoolean()) {
+      return Boolean.compare(lp.getAsBoolean(), rp.getAsBoolean());
+    }
+    if (lp.isNumber()) {
+      return Double.compare(lp.getAsDouble(), rp.getAsDouble());
+    }
+    return lp.getAsString().compareTo(rp.getAsString());
+  }
+
+  // 0..3 = scalars, 4 = non-scalar bucket (arrays/objects/etc)
+  private static int bucketRank(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return 0;
+    }
+    if (!element.isJsonPrimitive()) {
+      return 4; // array/object -> shove to end
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    if (primitive.isBoolean()) {
+      return 1;
+    }
+    if (primitive.isNumber()) {
+      return 2;
+    }
+    if (primitive.isString()) {
+      return 3;
+    }
+    return 4;
+  }
+
+  // Returns 0..3 for scalars, -1 for arrays/objects/other weirdness.
+  private static int scalarRank(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return 0;
+    }
+    if (!element.isJsonPrimitive()) {
+      return -1;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    if (primitive.isBoolean()) {
+      return 1;
+    }
+    if (primitive.isNumber()) {
+      return 2;
+    }
+    if (primitive.isString()) {
+      return 3;
+    }
+    return -1;
+  }
+
+  private static int typeRank(JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      return 0;
+    }
+    if (element.isJsonPrimitive()) {
+      JsonPrimitive primitive = element.getAsJsonPrimitive();
+      if (primitive.isBoolean()) {
+        return 1;
+      }
+      if (primitive.isNumber()) {
+        return 2;
+      }
+      if (primitive.isString()) {
+        return 3;
+      }
+      return 3;
+    }
+    if (element.isJsonArray()) {
+      return 4;
+    }
+    if (element.isJsonObject()) {
+      return 5;
+    }
+    return 6;
+  }
+
+  @Override
+  public String getName() {
+    return "sort";
+  }
 
   @Override
   public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.isEmpty() || rawArgs.size() > 2) {
-      throw new IllegalArgumentException("sort expects 1 or 2 arguments: sort(keySelector, [\"asc\"|\"desc\"])");
+    if (rawArgs.size() > 2) {
+      throw new IllegalArgumentException("sort expects 0..2 arguments");
     }
 
-    Function<JsonElement, JsonElement> keySelector = compiler.compile(rawArgs.get(0));
-
+    Function<JsonElement, JsonElement> selector = Function.identity();
     boolean descending = false;
-    if (rawArgs.size() == 2) {
-      String direction = JsonQueryGson.requireString(rawArgs.get(1), "sort direction must be a string: \"asc\" or \"desc\"")
-          .trim()
-          .toLowerCase();
 
-      if ("desc".equals(direction)) {
-        descending = true;
-      } else if (!"asc".equals(direction)) {
+    if (rawArgs.size() == 1) {
+      JsonElement arg0 = rawArgs.get(0);
+      if (isDirection(arg0)) {
+        descending = isDesc(arg0.getAsString());
+      } else {
+        selector = compileArg(arg0, compiler);
+      }
+    } else if (rawArgs.size() == 2) {
+      selector = compileArg(rawArgs.get(0), compiler);
+      JsonElement dir = rawArgs.get(1);
+      if (!isDirection(dir)) {
         throw new IllegalArgumentException("sort direction must be \"asc\" or \"desc\"");
       }
+      descending = isDesc(dir.getAsString());
     }
 
-    boolean finalDescending = descending;
+    Function<JsonElement, JsonElement> selected = selector;
+    Comparator<JsonElement> comparator = (left, right) -> {
+      JsonElement leftKey = safe(selected.apply(left));
+      JsonElement rightKey = safe(selected.apply(right));
+      return compareJson(leftKey, rightKey);
+    };
+
+    if (descending) {
+      comparator = comparator.reversed();
+    }
+
+    Comparator<JsonElement> finalComparator = comparator;
 
     return data -> {
       if (data == null || data.isJsonNull()) {
         return JsonNull.INSTANCE;
       }
       if (!data.isJsonArray()) {
-        return data;
+        throw new IllegalArgumentException("Array expected");
       }
 
-      JsonArray input = data.getAsJsonArray();
-      List<SortEntry> entries = new ArrayList<>(input.size());
-
-      for (int i = 0; i < input.size(); i++) {
-        JsonElement element = input.get(i);
-        JsonElement key = keySelector.apply(element);
-        entries.add(new SortEntry(i, element, JsonQueryGson.nullToJsonNull(key)));
+      JsonArray array = data.getAsJsonArray();
+      List<JsonElement> list = new ArrayList<>(array.size());
+      for (JsonElement element : array) {
+        list.add(element);
       }
 
-      entries.sort((left, right) -> {
-        int result = compareKeys(left.getKey(), right.getKey(), finalDescending);
-        if (result != 0) {
-          return result;
-        }
-        return Integer.compare(left.getOriginalIndex(), right.getOriginalIndex());
-      });
+      list.sort(finalComparator);
 
-      JsonArray output = new JsonArray();
-      for (SortEntry entry : entries) {
-        output.add(entry.getElement());
+      JsonArray out = new JsonArray();
+      for (JsonElement element : list) {
+        out.add(element);
       }
-      return output;
+      return out;
     };
-  }
-
-  private int compareKeys(JsonElement left, JsonElement right, boolean descending) {
-    boolean leftNull = left == null || left.isJsonNull();
-    boolean rightNull = right == null || right.isJsonNull();
-
-    if (leftNull && rightNull) {
-      return 0;
-    }
-    if (leftNull) {
-      return descending ? -1 : 1;
-    }
-    if (rightNull) {
-      return descending ? 1 : -1;
-    }
-
-    int base = compareNonNull(left, right);
-    if (base == 0) {
-      return 0;
-    }
-    return descending ? -base : base;
-  }
-
-  private int compareNonNull(JsonElement left, JsonElement right) {
-    if (left.isJsonPrimitive() && right.isJsonPrimitive()) {
-      JsonPrimitive lp = left.getAsJsonPrimitive();
-      JsonPrimitive rp = right.getAsJsonPrimitive();
-
-      if (lp.isNumber() && rp.isNumber()) {
-        return Double.compare(lp.getAsDouble(), rp.getAsDouble());
-      }
-      if (lp.isString() && rp.isString()) {
-        return lp.getAsString().compareTo(rp.getAsString());
-      }
-      if (lp.isBoolean() && rp.isBoolean()) {
-        return Boolean.compare(lp.getAsBoolean(), rp.getAsBoolean());
-      }
-
-      return lp.getAsString().compareTo(rp.getAsString());
-    }
-
-    return left.toString().compareTo(right.toString());
   }
 }
