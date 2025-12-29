@@ -311,4 +311,32 @@ class JsonQueryCompilerTest {
     Assertions.assertEquals(expected, result);
   }
 
+  @Test
+  void parseHumanReadablePipelineQuery() throws Exception {
+    String query = """
+        .friends
+          | filter(.city == "New York")
+          | sort(.age)
+          | pick(.name, .age)
+        """;
+
+    JsonElement ast = JsonQueryParser.parse(query);
+
+    JsonElement expected = JsonParser.parseString("""
+        [
+          "pipe",
+          ["get","friends"],
+          ["filter", ["eq", ["get","city"], "New York"]],
+          ["sort", ["get","age"]],
+          ["pick", ["get","name"], ["get","age"]]
+        ]
+        """);
+
+    Assertions.assertEquals(expected, ast);
+
+    Assertions.assertDoesNotThrow(() ->
+        JsonQueryCompiler.createDefault().compile(ast)
+    );
+  }
+
 }
