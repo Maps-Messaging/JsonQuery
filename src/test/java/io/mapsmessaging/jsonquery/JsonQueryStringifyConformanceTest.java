@@ -91,18 +91,20 @@ public class JsonQueryStringifyConformanceTest {
     assertNotNull(inputAst, "Test case missing 'input'");
 
     if (expectedThrows != null) {
-      RuntimeException ex = assertThrows(RuntimeException.class, () -> { new JsonQueryStringifier().stringify(inputAst); });
+      RuntimeException ex = assertThrows(RuntimeException.class, () -> {
+        new JsonQueryStringifier(options).stringify(inputAst);
+      });
       assertEquals(expectedThrows, ex.getMessage());
       return;
     }
 
     assertNotNull(expectedOutput, "Test case missing 'output'");
 
-    String actual = new JsonQueryStringifier().stringify(inputAst);
-    if(!expectedOutput.equals(actual)){
-      System.out.println("Input"+inputAst);
-      System.out.println("Expected:"+expectedOutput);
-      System.out.println("Actual:"+actual);
+    String actual = new JsonQueryStringifier(options).stringify(inputAst);
+    if (!expectedOutput.equals(actual)) {
+      System.out.println("Input" + inputAst);
+      System.out.println("Expected:" + expectedOutput);
+      System.out.println("Actual:" + actual);
     }
     assertEquals(expectedOutput, actual);
   }

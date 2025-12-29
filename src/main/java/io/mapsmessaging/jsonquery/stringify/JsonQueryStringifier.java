@@ -32,7 +32,7 @@ public final class JsonQueryStringifier {
   private final Options options;
 
   public JsonQueryStringifier() {
-    this(new Options());
+    this(null);
   }
 
   public JsonQueryStringifier(Options options) {
@@ -41,6 +41,10 @@ public final class JsonQueryStringifier {
 
   public String stringify(JsonElement ast) {
     return stringifyExpr(ast, Context.TOP, 0);
+  }
+
+  public String stringify(JsonElement ast, Options options) {
+    return new JsonQueryStringifier(options).stringify(ast);
   }
 
   private enum Context {
@@ -110,7 +114,7 @@ public final class JsonQueryStringifier {
     }
 
     JsonArray arr = el.getAsJsonArray();
-    if (arr.size() == 0) {
+    if (arr.isEmpty()) {
       return "";
     }
 
@@ -207,7 +211,7 @@ public final class JsonQueryStringifier {
       if (last != null && last.isJsonPrimitive() && last.getAsJsonPrimitive().isString()) {
         String v = last.getAsString();
         if ("asc".equals(v) || "desc".equals(v)) {
-          forceMultiline = true;
+          forceMultiline = false;
         }
       }
     }
@@ -342,7 +346,7 @@ public final class JsonQueryStringifier {
     }
 
     JsonArray childArr = childEl.getAsJsonArray();
-    if (childArr.size() == 0) {
+    if (childArr.isEmpty()) {
       return rendered;
     }
 
@@ -434,7 +438,27 @@ public final class JsonQueryStringifier {
   }
 
   private String stringifyObjectLiteral(JsonObject obj, Context ctx, int indentLevel) {
-    // The suite wants objects rendered multiline (including top-level and nested cases).
+    // Rule: object used as a pipe stage must be multiline.
+    boolean forceMultiline = (ctx == Context.PIPE_STAGE);
+
+    // Rule: if any value is a pipe call, object must be multiline.
+    if (!forceMultiline) {
+      for (String key : obj.keySet()) {
+        if (isPipeCall(obj.get(key))) {
+          forceMultiline = true;
+          break;
+        }
+      }
+    }
+
+    if (!forceMultiline) {
+      String singleLine = buildObjectSingleLine(obj, indentLevel);
+      if (singleLine != null && singleLine.length() <= options.getMaxLineLength()) {
+        return singleLine;
+      }
+    }
+
+    // Fallback: multiline formatting.
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
 
@@ -468,12 +492,63 @@ public final class JsonQueryStringifier {
     return sb.toString();
   }
 
+  private String buildObjectSingleLine(JsonObject obj, int indentLevel) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{ ");
+
+    int count = 0;
+
+    for (String key : obj.keySet()) {
+      if (count > 0) {
+        sb.append(", ");
+      }
+
+      sb.append(formatObjectKey(key)).append(": ");
+
+      JsonElement valueEl = obj.get(key);
+
+      // If any value is a pipe call, object should not be single-line.
+      if (isPipeCall(valueEl)) {
+        return null;
+      }
+
+      String renderedValue;
+      if (isArrayLiteralCall(valueEl)) {
+        renderedValue = stringifyArrayLiteral(valueEl.getAsJsonArray(), indentLevel, false);
+      } else {
+        renderedValue = stringifyExpr(valueEl, Context.OBJECT_VALUE, indentLevel);
+      }
+
+      if (renderedValue.indexOf('\n') >= 0) {
+        return null;
+      }
+
+      sb.append(renderedValue);
+      count++;
+    }
+
+    sb.append(" }");
+    return sb.toString();
+  }
+
+  private boolean isPipeCall(JsonElement el) {
+    if (el == null || !el.isJsonArray()) {
+      return false;
+    }
+    JsonArray a = el.getAsJsonArray();
+    if (a.isEmpty()) {
+      return false;
+    }
+    String head = asString(a.get(0));
+    return "pipe".equals(head);
+  }
+
   private boolean isArrayLiteralCall(JsonElement el) {
     if (el == null || !el.isJsonArray()) {
       return false;
     }
     JsonArray a = el.getAsJsonArray();
-    if (a.size() == 0) {
+    if (a.isEmpty()) {
       return false;
     }
     String head = asString(a.get(0));
