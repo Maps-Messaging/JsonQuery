@@ -160,6 +160,189 @@ JsonQueryFunction
 
 This is a **query/filter engine**, not a programming language.
 
+## Java API Examples
+
+All examples use the **public JsonQuery API**:
+- `JsonQueryParser`
+- `JsonQueryCompiler`
+- `Function<JsonElement, JsonElement>`
+
+They show **exactly how users write Java**, not JSON ASTs by hand.
+
+---
+
+### Common Setup
+
+```java
+JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+```
+
+---
+
+### `get`
+
+#### Example: read a field from an object
+
+```java
+JsonElement ast = JsonQueryParser.parse(".age");
+Function<JsonElement, JsonElement> program = compiler.compile(ast);
+
+JsonElement input = JsonParser.parseString(
+    "{ "name": "Chris", "age": 23 }"
+);
+
+JsonElement result = program.apply(input);
+```
+
+**Result**
+```json
+23
+```
+
+---
+
+### `filter`
+
+Filters an array using a JMS selector.
+
+```java
+JsonElement ast = JsonQueryParser.parse(
+    "filter("address.state = 'Alaska' and age >= 21")"
+);
+
+Function<JsonElement, JsonElement> program = compiler.compile(ast);
+
+JsonElement input = JsonParser.parseString(
+    """
+    [
+      {"name":"Chris","age":23,"address":{"state":"Alaska"}},
+      {"name":"Joe","age":19,"address":{"state":"Alaska"}},
+      {"name":"Emily","age":32,"address":{"state":"Texas"}}
+    ]
+    """
+);
+
+JsonElement result = program.apply(input);
+```
+
+---
+
+### `sort`
+
+```java
+JsonElement ast = JsonQueryParser.parse(
+    "sort(.age, "desc")"
+);
+
+Function<JsonElement, JsonElement> program = compiler.compile(ast);
+
+JsonElement input = JsonParser.parseString(
+    """
+    [
+      {"name":"Chris","age":23},
+      {"name":"Joe","age":32},
+      {"name":"Emily","age":19}
+    ]
+    """
+);
+
+JsonElement result = program.apply(input);
+```
+
+---
+
+### `map`
+
+```java
+JsonElement ast = JsonQueryParser.parse(
+    "map(.age)"
+);
+
+Function<JsonElement, JsonElement> program = compiler.compile(ast);
+
+JsonElement input = JsonParser.parseString(
+    """
+    [
+      {"name":"Chris","age":23},
+      {"name":"Joe","age":32},
+      {"name":"Emily","age":19}
+    ]
+    """
+);
+
+JsonElement result = program.apply(input);
+```
+
+---
+
+### `pick`
+
+```java
+JsonElement ast = JsonQueryParser.parse(
+    "pick("timestamp", "particles_gt_10")"
+);
+
+Function<JsonElement, JsonElement> program = compiler.compile(ast);
+
+JsonElement input = JsonParser.parseString(
+    """
+    {
+      "timestamp": "2026-01-31T12:00:00Z",
+      "particles_gt_10": 742,
+      "particles_gt_2_5": 1200
+    }
+    """
+);
+
+JsonElement result = program.apply(input);
+```
+
+---
+
+### `pipe`
+
+End-to-end example.
+
+```java
+JsonElement ast = JsonQueryParser.parse(
+    """
+    filter("address.state = 'Alaska'")
+      | sort(.age, "desc")
+      | pick("name", "age")
+    """
+);
+
+Function<JsonElement, JsonElement> program = compiler.compile(ast);
+
+JsonElement input = JsonParser.parseString(
+    """
+    [
+      {"name":"Chris","age":23,"address":{"state":"Alaska"}},
+      {"name":"Joe","age":32,"address":{"state":"Alaska"}},
+      {"name":"Emily","age":19,"address":{"state":"Texas"}}
+    ]
+    """
+);
+
+JsonElement result = program.apply(input);
+```
+
+---
+
+### Reuse the Compiled Query
+
+```java
+Function<JsonElement, JsonElement> program =
+    compiler.compile(JsonQueryParser.parse("map(.age)"));
+
+JsonElement out1 = program.apply(data1);
+JsonElement out2 = program.apply(data2);
+JsonElement out3 = program.apply(data3);
+```
+
+Compiled queries are immutable, thread-safe, and cheap to execute.
+
+
 ---
 
 ## License
