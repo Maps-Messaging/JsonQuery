@@ -29,6 +29,10 @@ Supported functions:
 - `pick`
 - `pipe`
 
+
+Want to dive deper? 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Maps-Messaging/JsonQuery)
+
 ---
 
 ## Basic Usage
