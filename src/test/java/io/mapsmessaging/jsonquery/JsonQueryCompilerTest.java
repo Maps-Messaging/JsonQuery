@@ -20,7 +20,9 @@
 package io.mapsmessaging.jsonquery;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -337,6 +339,69 @@ class JsonQueryCompilerTest {
     Assertions.assertDoesNotThrow(() ->
         JsonQueryCompiler.createDefault().compile(ast)
     );
+  }
+
+  @Test
+  void epochToIsoAcceptsMilliseconds() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+    JsonElement query = JsonParser.parseString("""
+        ["epoch_to_iso", 1711972800789]
+        """);
+
+    JsonElement result = compiler.compile(query).apply(JsonNull.INSTANCE);
+
+    Assertions.assertEquals(new JsonPrimitive("2024-04-01T12:00:00.789Z"), result);
+  }
+
+  @Test
+  void epochToIsoAcceptsSeconds() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+    JsonElement query = JsonParser.parseString("""
+        ["epoch_to_iso", 1711972800]
+        """);
+
+    JsonElement result = compiler.compile(query).apply(JsonNull.INSTANCE);
+
+    Assertions.assertEquals(new JsonPrimitive("2024-04-01T12:00:00.000Z"), result);
+  }
+
+  @Test
+  void epochToIsoAcceptsNumericStrings() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+    JsonElement query = JsonParser.parseString("""
+        ["epoch_to_iso", "1711972800000"]
+        """);
+
+    JsonElement result = compiler.compile(query).apply(JsonNull.INSTANCE);
+
+    Assertions.assertEquals(new JsonPrimitive("2024-04-01T12:00:00.000Z"), result);
+  }
+
+  @Test
+  void epochToIsoReturnsNullForNullInput() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+    JsonElement query = JsonParser.parseString("""
+        ["epoch_to_iso", null]
+        """);
+
+    JsonElement result = compiler.compile(query).apply(JsonNull.INSTANCE);
+
+    Assertions.assertTrue(result.isJsonNull());
+  }
+
+  @Test
+  void epochToIsoRejectsNonNumericInput() {
+    JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
+    JsonElement query = JsonParser.parseString("""
+        ["epoch_to_iso", "not-a-number"]
+        """);
+
+    IllegalArgumentException exception = Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> compiler.compile(query).apply(JsonNull.INSTANCE)
+    );
+
+    Assertions.assertTrue(exception.getMessage().contains("epoch_to_iso expects"));
   }
 
 }

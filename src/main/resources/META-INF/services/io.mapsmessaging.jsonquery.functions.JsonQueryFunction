@@ -20,6 +20,7 @@
 io.mapsmessaging.jsonquery.functions.numeric.AbsFunction
 io.mapsmessaging.jsonquery.functions.logic.AndFunction
 io.mapsmessaging.jsonquery.functions.ArrayFunction
+io.mapsmessaging.jsonquery.functions.EpochToIsoFunction
 io.mapsmessaging.jsonquery.functions.ExistsFunction
 io.mapsmessaging.jsonquery.functions.FilterFunction
 io.mapsmessaging.jsonquery.functions.FilterSelectorFunction
