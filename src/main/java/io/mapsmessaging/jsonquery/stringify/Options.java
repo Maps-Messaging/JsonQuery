@@ -16,23 +16,27 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+package io.mapsmessaging.jsonquery.stringify;
 
-package io.mapsmessaging.jsonquery.functions.numeric;
+public final class Options {
 
-public final class MultiplyFunction extends AbstractNumericBinaryFunction {
+  private final String indentation;
+  private final int maxLineLength;
 
-  @Override
-  public String getName() {
-    return "multiply";
+  public Options() {
+    this("  ", 120);
   }
 
-  @Override
-  protected double apply(double left, double right) {
-    return left * right;
+  public Options(String indentation, int maxLineLength) {
+    this.indentation = indentation == null ? "  " : indentation;
+    this.maxLineLength = maxLineLength;
   }
 
-  @Override
-  protected String symbol() {
-    return "*";
+  public String getIndentation() {
+    return indentation;
+  }
+
+  public int getMaxLineLength() {
+    return maxLineLength;
   }
 }
