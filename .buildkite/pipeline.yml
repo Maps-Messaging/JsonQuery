@@ -10,4 +10,4 @@ steps:
       SONAR_TOKEN: "${SONAR_TOKEN}"
       BUILDKITE_ANALYTICS_TOKEN: "$(buildkite-agent secret get jsonqueryTestSuite)"
     agents:
-      queue: "raspberrypi_build_agent"
+      queue: "java_build_queue"
