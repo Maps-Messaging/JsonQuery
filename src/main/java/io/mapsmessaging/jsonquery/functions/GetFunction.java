@@ -27,7 +27,6 @@ import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
@@ -44,15 +43,16 @@ public final class GetFunction implements JsonQueryFunction {
       return data -> data == null ? JsonNull.INSTANCE : data;
     }
 
-    List<PathSegment> path = new ArrayList<>(rawArgs.size());
-    for (JsonElement rawArg : rawArgs) {
+    PathSegment[] compiledPath = new PathSegment[rawArgs.size()];
+    for (int i = 0; i < rawArgs.size(); i++) {
+      JsonElement rawArg = rawArgs.get(i);
       if (rawArg == null || rawArg.isJsonNull() || !rawArg.isJsonPrimitive()) {
         throw new IllegalArgumentException("get expects path segments of type string or number");
       }
 
       JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
       if (primitive.isString()) {
-        path.add(new ObjectPathSegment(primitive.getAsString()));
+        compiledPath[i] = new ObjectPathSegment(primitive.getAsString());
         continue;
       }
       if (!primitive.isNumber()) {
@@ -67,10 +67,9 @@ public final class GetFunction implements JsonQueryFunction {
           || bigDecimal.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
         throw new IllegalArgumentException("get array index out of int range");
       }
-      path.add(new ArrayPathSegment(bigDecimal.intValue()));
+      compiledPath[i] = new ArrayPathSegment(bigDecimal.intValue());
     }
 
-    PathSegment[] compiledPath = path.toArray(PathSegment[]::new);
     return data -> {
       JsonElement current = data == null ? JsonNull.INSTANCE : data;
       for (PathSegment segment : compiledPath) {
