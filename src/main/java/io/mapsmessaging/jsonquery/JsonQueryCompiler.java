@@ -25,9 +25,11 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.functions.FunctionRegistry;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
+import io.mapsmessaging.jsonquery.parser.JsonQueryParseException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 public final class JsonQueryCompiler {
@@ -58,6 +60,11 @@ public final class JsonQueryCompiler {
     }
     JsonPrimitive primitive = element.getAsJsonPrimitive();
     return primitive.isString();
+  }
+
+  public Function<JsonElement, JsonElement> compile(String query) throws JsonQueryParseException {
+    Objects.requireNonNull(query, "query");
+    return compile(JsonQueryParser.parse(query));
   }
 
   public Function<JsonElement, JsonElement> compile(JsonElement query) {
