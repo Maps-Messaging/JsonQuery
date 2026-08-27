@@ -26,6 +26,8 @@ import java.util.ServiceLoader;
 
 public final class FunctionRegistry {
 
+  private static final FunctionRegistry BUILT_INS = loadBuiltIns();
+
   private final Map<String, JsonQueryFunction> functions;
 
   public FunctionRegistry(Map<String, JsonQueryFunction> functions) {
@@ -37,6 +39,10 @@ public final class FunctionRegistry {
   }
 
   public static FunctionRegistry builtIns() {
+    return BUILT_INS;
+  }
+
+  private static FunctionRegistry loadBuiltIns() {
     ServiceLoader<JsonQueryFunction> serviceLoaded = ServiceLoader.load(JsonQueryFunction.class);
     Map<String, JsonQueryFunction> builtIns = new HashMap<>();
     for (JsonQueryFunction analyser : serviceLoaded) {
