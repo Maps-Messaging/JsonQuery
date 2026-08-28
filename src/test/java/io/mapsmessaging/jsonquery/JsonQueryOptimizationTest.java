@@ -22,10 +22,9 @@ package io.mapsmessaging.jsonquery;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import io.mapsmessaging.jsonquery.functions.FunctionRegistry;
+import java.util.function.Function;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.function.Function;
 
 class JsonQueryOptimizationTest {
 
@@ -37,7 +36,7 @@ class JsonQueryOptimizationTest {
   @Test
   void compileTextProducesReusableProgram() throws Exception {
     JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
-    Function<JsonElement, JsonElement> program = compiler.compile("[\"get\",\"position\",\"latitude\"]");
+    Function<JsonElement, JsonElement> program = compiler.compile("get(\"position\",\"latitude\")");
 
     JsonElement first = JsonParser.parseString("{\"position\":{\"latitude\":51.1}}");
     JsonElement second = JsonParser.parseString("{\"position\":{\"latitude\":52.2}}");
@@ -49,7 +48,7 @@ class JsonQueryOptimizationTest {
   @Test
   void compiledGetSupportsObjectAndArraySegments() throws Exception {
     JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
-    Function<JsonElement, JsonElement> program = compiler.compile("[\"get\",\"vehicles\",1,\"name\"]");
+    Function<JsonElement, JsonElement> program = compiler.compile("get(\"vehicles\",1,\"name\")");
 
     JsonElement input = JsonParser.parseString("{\"vehicles\":[{\"name\":\"alpha\"},{\"name\":\"bravo\"}]}");
 
@@ -59,7 +58,7 @@ class JsonQueryOptimizationTest {
   @Test
   void compiledGetStillReturnsNullForMissingPath() throws Exception {
     JsonQueryCompiler compiler = JsonQueryCompiler.createDefault();
-    Function<JsonElement, JsonElement> program = compiler.compile("[\"get\",\"position\",\"latitude\"]");
+    Function<JsonElement, JsonElement> program = compiler.compile("get(\"position\",\"latitude\")");
 
     JsonElement input = JsonParser.parseString("{\"position\":{}}");
 
