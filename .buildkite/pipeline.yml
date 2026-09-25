@@ -2,7 +2,7 @@ steps:
   - label: ":maven: Build and Deploy"
     command:
       - export SONAR_TOKEN=$(buildkite-agent secret get SONAR_TOKEN)
-      - mvn -Dgpg.skip=true clean deploy -Psnapshot -U
+      - mvn clean deploy -Psnapshot -U
       - mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar -Psnapshot -Dsonar.token=$${SONAR_TOKEN} -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
     secrets:
