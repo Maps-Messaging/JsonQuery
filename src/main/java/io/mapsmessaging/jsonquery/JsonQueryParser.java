@@ -313,79 +313,90 @@ public final class JsonQueryParser {
       throw JsonQueryParseException.valueExpected(index);
     }
 
-    if (peekChar('.')) {
-      int dotPos = index;
-      consumeChar('.');
-      List<Object> segments = new ArrayList<>();
-      segments.add(parsePropertyAfterDot(dotPos));
-
-      while (true) {
-        int save = index;
-        skipWhitespace();
-        if (!peekChar('.')) {
-          index = save;
-          break;
-        }
-        int nextDot = index;
-        consumeChar('.');
-        segments.add(parsePropertyAfterDot(nextDot));
-      }
-
-      return makeGetChain(segments);
+    char current = peekChar();
+    if (current == '.') {
+      return parsePropertyChain();
     }
-
-    if (peekChar('(')) {
-      consumeChar('(');
-      JsonElement inside = parsePipe();
-      skipWhitespace();
-      if (!consumeChar(')')) {
-        throw JsonQueryParseException.characterExpected(')', index);
-      }
-      return inside;
+    if (current == '(') {
+      return parseParenthesized();
     }
-
-    if (peekChar('[')) {
+    if (current == '[') {
       return parseArray();
     }
-
-    if (peekChar('{')) {
+    if (current == '{') {
       return parseObject();
     }
-
-    if (peekChar('"')) {
+    if (current == '"') {
       return new JsonPrimitive(parseStringValueOrThrowValueContext());
     }
+    if (current == '-' || isDigit(current)) {
+      return parseNumberValue();
+    }
 
+    JsonElement keyword = parseKeywordLiteral();
+    if (keyword != null) {
+      return keyword;
+    }
+    if (isIdentStart(current)) {
+      return parseIdentifierPrimary();
+    }
+
+    throw JsonQueryParseException.valueExpected(index);
+  }
+
+  private JsonElement parsePropertyChain() throws JsonQueryParseException {
+    int dotPos = index;
+    consumeChar('.');
+    List<Object> segments = new ArrayList<>();
+    segments.add(parsePropertyAfterDot(dotPos));
+
+    while (true) {
+      int save = index;
+      skipWhitespace();
+      if (!peekChar('.')) {
+        index = save;
+        break;
+      }
+      int nextDot = index;
+      consumeChar('.');
+      segments.add(parsePropertyAfterDot(nextDot));
+    }
+    return makeGetChain(segments);
+  }
+
+  private JsonElement parseParenthesized() throws JsonQueryParseException {
+    consumeChar('(');
+    JsonElement inside = parsePipe();
+    skipWhitespace();
+    if (!consumeChar(')')) {
+      throw JsonQueryParseException.characterExpected(')', index);
+    }
+    return inside;
+  }
+
+  private JsonElement parseKeywordLiteral() {
     if (peekKeyword("true")) {
       consumeKeyword("true");
       return new JsonPrimitive(true);
     }
-
     if (peekKeyword("false")) {
       consumeKeyword("false");
       return new JsonPrimitive(false);
     }
-
     if (peekKeyword("null")) {
       consumeKeyword("null");
       return JsonNull.INSTANCE;
     }
+    return null;
+  }
 
-    if (peekChar('-') || isDigit(peekChar())) {
-      return parseNumberValue();
+  private JsonElement parseIdentifierPrimary() throws JsonQueryParseException {
+    String name = parseIdentifier();
+    skipWhitespace();
+    if (peekChar('(')) {
+      return parseFunctionCall(name);
     }
-
-    if (isIdentStart(peekChar())) {
-      String name = parseIdentifier();
-      skipWhitespace();
-      if (peekChar('(')) {
-        return parseFunctionCall(name);
-      }
-      // bare identifiers are not valid values in this language (conformance expects Value expected)
-      throw JsonQueryParseException.valueExpected(index - name.length());
-    }
-
-    throw JsonQueryParseException.valueExpected(index);
+    throw JsonQueryParseException.valueExpected(index - name.length());
   }
 
   private JsonElement parseFunctionCall(String name) throws JsonQueryParseException {
@@ -574,85 +585,78 @@ public final class JsonQueryParser {
   }
 
   private Object parsePropertyAfterDot(int dotPos) throws JsonQueryParseException {
-    int pos = dotPos + 1;
-    if (pos >= input.length()) {
-      throw JsonQueryParseException.propertyExpected(pos);
+    int position = dotPos + 1;
+    if (position >= input.length() || Character.isWhitespace(input.charAt(position))) {
+      throw JsonQueryParseException.propertyExpected(position);
     }
 
-    char ch = input.charAt(pos);
-    if (Character.isWhitespace(ch)) {
-      throw JsonQueryParseException.propertyExpected(pos);
+    char current = input.charAt(position);
+    if (current == '"') {
+      index = position;
+      return parseStringValueOrThrowPropertyContext(position);
+    }
+    if (isDigit(current)) {
+      return parseNumericProperty(position);
+    }
+    if (isIdentStart(current)) {
+      return parseNamedProperty(position);
+    }
+    throw JsonQueryParseException.propertyExpected(position);
+  }
+
+  private int parseNumericProperty(int position) throws JsonQueryParseException {
+    if (input.charAt(position) == '0') {
+      validateNoLeadingZeroProperty(position);
+      index = position + 1;
+      return 0;
     }
 
-    // quoted property
-    if (ch == '"') {
-      index = pos;
-      try {
-        return parseStringValueOrThrowPropertyContext(dotPos + 1);
-      } finally {
-        // parseStringValue* advances index already
-      }
+    int value = 0;
+    int cursor = position;
+    while (cursor < input.length() && isDigit(input.charAt(cursor))) {
+      value = (value * 10) + (input.charAt(cursor) - '0');
+      cursor++;
+    }
+    rejectIdentifierSuffix(cursor);
+    index = cursor;
+    return value;
+  }
+
+  private void validateNoLeadingZeroProperty(int position) throws JsonQueryParseException {
+    if (position + 1 < input.length() && isDigit(input.charAt(position + 1))) {
+      throw JsonQueryParseException.unexpectedPart(
+          String.valueOf(input.charAt(position + 1)));
+    }
+  }
+
+  private String parseNamedProperty(int position) throws JsonQueryParseException {
+    int cursor = position + 1;
+    while (cursor < input.length() && isIdentPart(input.charAt(cursor))) {
+      cursor++;
     }
 
-    // numeric property
-    if (ch >= '0' && ch <= '9') {
-      if (ch == '0') {
-        if (pos + 1 < input.length()) {
-          char next = input.charAt(pos + 1);
-          if (next >= '0' && next <= '9') {
-            throw JsonQueryParseException.unexpectedPart(String.valueOf(next));
-          }
-        }
-        index = pos + 1;
-        return 0;
+    if (cursor < input.length() && input.charAt(cursor) == '#') {
+      int suffixEnd = cursor + 1;
+      while (suffixEnd < input.length() && isIdentPart(input.charAt(suffixEnd))) {
+        suffixEnd++;
       }
-
-      int value = 0;
-      int i = pos;
-      while (i < input.length()) {
-        char d = input.charAt(i);
-        if (d < '0' || d > '9') {
-          break;
-        }
-        value = (value * 10) + (d - '0');
-        i++;
-      }
-
-      // ".1abc" -> Unexpected part 'abc'
-      if (i < input.length() && isIdentStart(input.charAt(i))) {
-        int j = i + 1;
-        while (j < input.length() && isIdentPart(input.charAt(j))) {
-          j++;
-        }
-        throw JsonQueryParseException.unexpectedPart(input.substring(i, j));
-      }
-
-      index = i;
-      return value;
+      throw JsonQueryParseException.unexpectedPart(input.substring(cursor, suffixEnd));
     }
 
-// identifier property
-    if (isIdentStart(ch)) {
-      int i = pos + 1;
-      while (i < input.length() && isIdentPart(input.charAt(i))) {
-        i++;
-      }
+    String name = input.substring(position, cursor);
+    index = cursor;
+    return name;
+  }
 
-      // After an unquoted property, "#" is illegal and must report "Unexpected part" WITHOUT pos
-      if (i < input.length() && input.charAt(i) == '#') {
-        int j = i + 1;
-        while (j < input.length() && isIdentPart(input.charAt(j))) {
-          j++;
-        }
-        throw JsonQueryParseException.unexpectedPart(input.substring(i, j)); // <-- no pos
-      }
-
-      String name = input.substring(pos, i);
-      index = i;
-      return name;
+  private void rejectIdentifierSuffix(int position) throws JsonQueryParseException {
+    if (position >= input.length() || !isIdentStart(input.charAt(position))) {
+      return;
     }
-
-    throw JsonQueryParseException.propertyExpected(pos);
+    int suffixEnd = position + 1;
+    while (suffixEnd < input.length() && isIdentPart(input.charAt(suffixEnd))) {
+      suffixEnd++;
+    }
+    throw JsonQueryParseException.unexpectedPart(input.substring(position, suffixEnd));
   }
 
   private JsonElement makeGetNode(Object property) {
@@ -1022,7 +1026,4 @@ public final class JsonQueryParser {
     return ch >= '0' && ch <= '9';
   }
 
-  public static void main(String[] args){
-    System.out.println(JsonQueryParser.parse("pick(\"timestamp\", \"particles_gt_10\") | wrap(\"payload\")"));
-  }
 }
