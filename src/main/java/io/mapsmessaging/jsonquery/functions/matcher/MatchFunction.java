@@ -52,7 +52,7 @@ public final class MatchFunction extends AbstractFunction {
         obj.add(name, new JsonPrimitive(value));
       }
     }
-    return obj.size() == 0 ? null : obj;
+    return obj.isEmpty() ? null : obj;
   }
 
   @Override
