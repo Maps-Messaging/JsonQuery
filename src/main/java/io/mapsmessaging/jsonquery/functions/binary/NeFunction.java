@@ -19,12 +19,15 @@
 
 package io.mapsmessaging.jsonquery.functions.binary;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import static io.mapsmessaging.jsonquery.functions.JsonQueryGson.isString;
@@ -32,57 +35,6 @@ import static io.mapsmessaging.jsonquery.functions.binary.AbstractBinaryPredicat
 import static io.mapsmessaging.jsonquery.functions.binary.AbstractBinaryPredicateFunction.isNumber;
 
 public final class NeFunction implements JsonQueryFunction {
-  private static boolean deepEquals(JsonElement left, JsonElement right) {
-    if (left == null || left.isJsonNull()) {
-      return right == null || right.isJsonNull();
-    }
-    if (right == null || right.isJsonNull()) {
-      return false;
-    }
-
-    if (left.isJsonPrimitive() && right.isJsonPrimitive()) {
-      if ((isNumber(left) && isNumber(right))
-          || (isString(left) && isString(right))
-          || (isBoolean(left) && isBoolean(right))) {
-        return AbstractBinaryPredicateFunction.compare(left, right) == 0;
-      }
-      return false;
-    }
-
-    if (left.isJsonArray() && right.isJsonArray()) {
-      var la = left.getAsJsonArray();
-      var ra = right.getAsJsonArray();
-      if (la.size() != ra.size()) {
-        return false;
-      }
-      for (int i = 0; i < la.size(); i++) {
-        if (!deepEquals(la.get(i), ra.get(i))) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    if (left.isJsonObject() && right.isJsonObject()) {
-      var lo = left.getAsJsonObject();
-      var ro = right.getAsJsonObject();
-      if (lo.size() != ro.size()) {
-        return false;
-      }
-      for (var entry : lo.entrySet()) {
-        String key = entry.getKey();
-        if (!ro.has(key)) {
-          return false;
-        }
-        if (!deepEquals(entry.getValue(), ro.get(key))) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    return false;
-  }
 
   @Override
   public String getName() {
@@ -90,7 +42,10 @@ public final class NeFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (rawArgs.size() != 2) {
       throw new IllegalArgumentException("ne expects 2 arguments");
     }
@@ -98,38 +53,64 @@ public final class NeFunction implements JsonQueryFunction {
     Function<JsonElement, JsonElement> leftExpression = compiler.compile(rawArgs.get(0));
     Function<JsonElement, JsonElement> rightExpression = compiler.compile(rawArgs.get(1));
 
-    return data -> {
-      JsonElement leftValue = leftExpression.apply(data);
-      JsonElement rightValue = rightExpression.apply(data);
-
-      boolean leftIsNull = (leftValue == null || leftValue.isJsonNull());
-      boolean rightIsNull = (rightValue == null || rightValue.isJsonNull());
-
-      // ne(null, null) = false
-      if (leftIsNull && rightIsNull) {
-        return new JsonPrimitive(false);
-      }
-
-      // ne(null, x) = true, ne(x, null) = true
-      if (leftIsNull || rightIsNull) {
-        return new JsonPrimitive(true);
-      }
-
-      // Same-type primitives: normal inequality
-      if (isNumber(leftValue) && isNumber(rightValue)) {
-        return new JsonPrimitive(Double.compare(leftValue.getAsDouble(), rightValue.getAsDouble()) != 0);
-      }
-      if (isString(leftValue) && isString(rightValue)) {
-        return new JsonPrimitive(!leftValue.getAsString().equals(rightValue.getAsString()));
-      }
-      if (isBoolean(leftValue) && isBoolean(rightValue)) {
-        return new JsonPrimitive(leftValue.getAsBoolean() != rightValue.getAsBoolean());
-      }
-
-      // For arrays/objects (and any other non-primitive combos):
-      return new JsonPrimitive(!deepEquals(leftValue, rightValue));
-
-    };
+    return data -> new JsonPrimitive(
+        !deepEquals(leftExpression.apply(data), rightExpression.apply(data)));
   }
 
+  private static boolean deepEquals(JsonElement left, JsonElement right) {
+    if (isNull(left)) {
+      return isNull(right);
+    }
+    if (isNull(right)) {
+      return false;
+    }
+    if (left.isJsonPrimitive() && right.isJsonPrimitive()) {
+      return primitiveEquals(left, right);
+    }
+    if (left.isJsonArray() && right.isJsonArray()) {
+      return arrayEquals(left.getAsJsonArray(), right.getAsJsonArray());
+    }
+    if (left.isJsonObject() && right.isJsonObject()) {
+      return objectEquals(left.getAsJsonObject(), right.getAsJsonObject());
+    }
+    return false;
+  }
+
+  private static boolean primitiveEquals(JsonElement left, JsonElement right) {
+    boolean comparable =
+        (isNumber(left) && isNumber(right))
+            || (isString(left) && isString(right))
+            || (isBoolean(left) && isBoolean(right));
+
+    return comparable && AbstractBinaryPredicateFunction.compare(left, right) == 0;
+  }
+
+  private static boolean arrayEquals(JsonArray left, JsonArray right) {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (int index = 0; index < left.size(); index++) {
+      if (!deepEquals(left.get(index), right.get(index))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean objectEquals(JsonObject left, JsonObject right) {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (Map.Entry<String, JsonElement> entry : left.entrySet()) {
+      if (!right.has(entry.getKey())
+          || !deepEquals(entry.getValue(), right.get(entry.getKey()))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static boolean isNull(JsonElement element) {
+    return element == null || element.isJsonNull();
+  }
 }
