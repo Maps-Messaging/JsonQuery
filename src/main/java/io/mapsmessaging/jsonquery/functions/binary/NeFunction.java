@@ -19,20 +19,13 @@
 
 package io.mapsmessaging.jsonquery.functions.binary;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
-
-import static io.mapsmessaging.jsonquery.functions.JsonQueryGson.isString;
-import static io.mapsmessaging.jsonquery.functions.binary.AbstractBinaryPredicateFunction.isBoolean;
-import static io.mapsmessaging.jsonquery.functions.binary.AbstractBinaryPredicateFunction.isNumber;
 
 public final class NeFunction implements JsonQueryFunction {
 
@@ -50,67 +43,8 @@ public final class NeFunction implements JsonQueryFunction {
       throw new IllegalArgumentException("ne expects 2 arguments");
     }
 
-    Function<JsonElement, JsonElement> leftExpression = compiler.compile(rawArgs.get(0));
-    Function<JsonElement, JsonElement> rightExpression = compiler.compile(rawArgs.get(1));
-
-    return data -> new JsonPrimitive(
-        !deepEquals(leftExpression.apply(data), rightExpression.apply(data)));
-  }
-
-  private static boolean deepEquals(JsonElement left, JsonElement right) {
-    if (isNull(left)) {
-      return isNull(right);
-    }
-    if (isNull(right)) {
-      return false;
-    }
-    if (left.isJsonPrimitive() && right.isJsonPrimitive()) {
-      return primitiveEquals(left, right);
-    }
-    if (left.isJsonArray() && right.isJsonArray()) {
-      return arrayEquals(left.getAsJsonArray(), right.getAsJsonArray());
-    }
-    if (left.isJsonObject() && right.isJsonObject()) {
-      return objectEquals(left.getAsJsonObject(), right.getAsJsonObject());
-    }
-    return false;
-  }
-
-  private static boolean primitiveEquals(JsonElement left, JsonElement right) {
-    boolean comparable =
-        (isNumber(left) && isNumber(right))
-            || (isString(left) && isString(right))
-            || (isBoolean(left) && isBoolean(right));
-
-    return comparable && AbstractBinaryPredicateFunction.compare(left, right) == 0;
-  }
-
-  private static boolean arrayEquals(JsonArray left, JsonArray right) {
-    if (left.size() != right.size()) {
-      return false;
-    }
-    for (int index = 0; index < left.size(); index++) {
-      if (!deepEquals(left.get(index), right.get(index))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static boolean objectEquals(JsonObject left, JsonObject right) {
-    if (left.size() != right.size()) {
-      return false;
-    }
-    for (Map.Entry<String, JsonElement> entry : left.entrySet()) {
-      if (!right.has(entry.getKey())
-          || !deepEquals(entry.getValue(), right.get(entry.getKey()))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static boolean isNull(JsonElement element) {
-    return element == null || element.isJsonNull();
+    Function<JsonElement, JsonElement> left = compiler.compile(rawArgs.get(0));
+    Function<JsonElement, JsonElement> right = compiler.compile(rawArgs.get(1));
+    return data -> new JsonPrimitive(!JsonDeepEquality.equals(left.apply(data), right.apply(data)));
   }
 }

@@ -19,10 +19,7 @@
 
 package io.mapsmessaging.jsonquery.functions.numeric;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
@@ -37,37 +34,26 @@ public final class MinFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (!rawArgs.isEmpty()) {
       throw new IllegalArgumentException("min expects 0 arguments");
     }
+    return MinFunction::minimum;
+  }
 
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        throw new IllegalArgumentException("Array expected");
-      }
+  private static JsonElement minimum(JsonElement data) {
+    List<Double> values = NumericArray.values(data);
+    if (values == null || values.isEmpty()) {
+      return NumericArray.nullValue();
+    }
 
-      JsonArray array = data.getAsJsonArray();
-      if (array.isEmpty()) {
-        return JsonNull.INSTANCE;
-      }
-
-      Double min = null;
-      for (JsonElement element : array) {
-        if (element == null || element.isJsonNull()) {
-          continue;
-        }
-        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
-          throw new IllegalArgumentException("Number expected");
-        }
-        double value = element.getAsDouble();
-        min = (min == null) ? value : Math.min(min, value);
-      }
-
-      return min == null ? JsonNull.INSTANCE : new JsonPrimitive(min);
-    };
+    double minimum = values.get(0);
+    for (int index = 1; index < values.size(); index++) {
+      minimum = Math.min(minimum, values.get(index));
+    }
+    return new com.google.gson.JsonPrimitive(minimum);
   }
 }
