@@ -95,7 +95,7 @@ public final class MatchAllFunction extends AbstractFunction {
               namedGroups.add(name, new JsonPrimitive(groupValue));
             }
           }
-          if (namedGroups.size() > 0) {
+          if (!namedGroups.isEmpty()) {
             result.add("namedGroups", namedGroups);
           }
         }
