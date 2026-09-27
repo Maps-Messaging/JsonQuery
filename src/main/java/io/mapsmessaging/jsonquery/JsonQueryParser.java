@@ -29,6 +29,8 @@ import io.mapsmessaging.jsonquery.parser.JsonQueryParseException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntFunction;
+import java.util.function.Supplier;
 
 public final class JsonQueryParser {
 
@@ -165,99 +167,85 @@ public final class JsonQueryParser {
     JsonElement left = parseAdditive();
     skipWhitespace();
 
-    String op = null;
-    if (peekString("<=")) {
-      op = "<=";
-    } else if (peekString(">=")) {
-      op = ">=";
-    } else if (peekChar('<')) {
-      op = "<";
-    } else if (peekChar('>')) {
-      op = ">";
-    }
-
-    if (op == null) {
+    String operator = comparisonOperator();
+    if (operator == null) {
       return left;
     }
 
-    consumeString(op);
+    consumeString(operator);
     skipWhitespace();
-    JsonElement right = parseAdditive();
-
-    String name;
-    if ("<".equals(op)) {
-      name = "lt";
-    } else if ("<=".equals(op)) {
-      name = "lte";
-    } else if (">".equals(op)) {
-      name = "gt";
-    } else {
-      name = "gte";
-    }
-
-    JsonElement node = makeCall(name, left, right);
+    JsonElement result = makeCall(comparisonName(operator), left, parseAdditive());
 
     skipWhitespace();
-    if (peekString("<=") || peekString(">=") || peekChar('<') || peekChar('>')) {
-      String slice = sliceOperatorRhs();
-      throw JsonQueryParseException.unexpectedPart(slice);
+    if (comparisonOperator() != null) {
+      throw JsonQueryParseException.unexpectedPart(sliceOperatorRhs());
     }
-    return node;
+    return result;
   }
 
   // + -
   private JsonElement parseAdditive() throws JsonQueryParseException {
-    JsonElement left = parseMultiplicative();
-    while (true) {
-      skipWhitespace();
-      if (peekChar('+')) {
-        consumeChar('+');
-        skipWhitespace();
-        JsonElement right = parseMultiplicative();
-        left = makeCall("add", left, right);
-        continue;
-      }
-      if (peekChar('-')) {
-        consumeChar('-');
-        skipWhitespace();
-        JsonElement right = parseMultiplicative();
-        left = makeCall("subtract", left, right);
-        continue;
-      }
-      break;
-    }
-    return left;
+    return parseBinaryChain(
+        this::parseMultiplicative,
+        operator -> switch (operator) {
+          case '+' -> "add";
+          case '-' -> "subtract";
+          default -> null;
+        });
   }
 
   // * / %
   private JsonElement parseMultiplicative() throws JsonQueryParseException {
-    JsonElement left = parsePow();
+    return parseBinaryChain(
+        this::parsePow,
+        operator -> switch (operator) {
+          case '*' -> "multiply";
+          case '/' -> "divide";
+          case '%' -> "mod";
+          default -> null;
+        });
+  }
+
+  private JsonElement parseBinaryChain(
+      Supplier<JsonElement> operandParser,
+      IntFunction<String> operatorName) {
+
+    JsonElement left = operandParser.get();
     while (true) {
       skipWhitespace();
-      if (peekChar('*')) {
-        consumeChar('*');
-        skipWhitespace();
-        JsonElement right = parsePow();
-        left = makeCall("multiply", left, right);
-        continue;
+      int operator = isEof() ? -1 : peekChar();
+      String name = operatorName.apply(operator);
+      if (name == null) {
+        return left;
       }
-      if (peekChar('/')) {
-        consumeChar('/');
-        skipWhitespace();
-        JsonElement right = parsePow();
-        left = makeCall("divide", left, right);
-        continue;
-      }
-      if (peekChar('%')) {
-        consumeChar('%');
-        skipWhitespace();
-        JsonElement right = parsePow();
-        left = makeCall("mod", left, right);
-        continue;
-      }
-      break;
+
+      index++;
+      skipWhitespace();
+      left = makeCall(name, left, operandParser.get());
     }
-    return left;
+  }
+
+  private String comparisonOperator() {
+    if (peekString("<=")) {
+      return "<=";
+    }
+    if (peekString(">=")) {
+      return ">=";
+    }
+    if (peekChar('<')) {
+      return "<";
+    }
+    return peekChar('>') ? ">" : null;
+  }
+
+  private static String comparisonName(String operator) {
+    return switch (operator) {
+      case "<" -> "lt";
+      case "<=" -> "lte";
+      case ">" -> "gt";
+      case ">=" -> "gte";
+      default -> throw new IllegalArgumentException("Unknown comparison operator " + operator);
+    };
   }
 
   // ^ (non-chainable)
@@ -403,57 +391,46 @@ public final class JsonQueryParser {
     consumeCharOrThrow('(');
     skipWhitespace();
 
-    List<JsonElement> args = new ArrayList<>();
-
-    // No-arg call: sort()
     if (consumeChar(')')) {
-      JsonArray call = new JsonArray();
-      call.add(name);
-      return call;
+      return makeFunctionCall(name, List.of());
     }
 
-    // First arg
-    args.add(parsePipe());
+    List<JsonElement> arguments = new ArrayList<>();
+    arguments.add(parsePipe());
+    parseRemainingArguments(arguments);
+    return makeFunctionCall(name, arguments);
+  }
 
+  private void parseRemainingArguments(List<JsonElement> arguments) {
     while (true) {
       skipWhitespace();
-
-      if (consumeChar(',')) {
-        skipWhitespace();
-        if (isEof()) {
-          // sort(.age,
-          throw JsonQueryParseException.valueExpected(index);
-        }
-        args.add(parsePipe());
-        continue;
-      }
-
       if (consumeChar(')')) {
-        break;
+        return;
+      }
+      if (!consumeChar(',')) {
+        if (isEof()) {
+          throw JsonQueryParseException.characterExpected(')', index);
+        }
+        throw JsonQueryParseException.characterExpected(',', index);
       }
 
+      skipWhitespace();
       if (isEof()) {
-        // sort(.age, "desc"
-        throw JsonQueryParseException.characterExpected(')', index);
+        throw JsonQueryParseException.valueExpected(index);
       }
-
-      // sort(.age "desc")
-      throw JsonQueryParseException.characterExpected(',', index);
+      arguments.add(parsePipe());
     }
+  }
 
-
-
+  private static JsonArray makeFunctionCall(String name, List<JsonElement> arguments) {
     JsonArray call = new JsonArray();
     call.add(name);
-    for (JsonElement arg : args) {
-      call.add(arg);
-    }
+    arguments.forEach(call::add);
     return call;
   }
 
 
   private JsonElement parseArray() throws JsonQueryParseException {
-    int startPos = index;
     consumeChar('[');
     skipWhitespace();
 
@@ -662,29 +639,25 @@ public final class JsonQueryParser {
   private JsonElement makeGetNode(Object property) {
     JsonArray get = new JsonArray();
     get.add("get");
-    if (property instanceof String) {
-      get.add((String) property);
-    } else if (property instanceof Integer) {
-      get.add((Integer) property);
-    } else {
-      get.add(String.valueOf(property));
-    }
+    addProperty(get, property);
     return get;
   }
 
   private JsonElement makeGetChain(List<Object> segments) {
     JsonArray get = new JsonArray();
     get.add("get");
-    for (Object seg : segments) {
-      if (seg instanceof String) {
-        get.add((String) seg);
-      } else if (seg instanceof Integer) {
-        get.add((Integer) seg);
-      } else {
-        get.add(String.valueOf(seg));
-      }
-    }
+    segments.forEach(segment -> addProperty(get, segment));
     return get;
+  }
+
+  private static void addProperty(JsonArray get, Object property) {
+    if (property instanceof String value) {
+      get.add(value);
+    } else if (property instanceof Integer value) {
+      get.add(value);
+    } else {
+      get.add(String.valueOf(property));
+    }
   }
 
   private JsonElement makeCall(String name, JsonElement left, JsonElement right) {
@@ -713,7 +686,7 @@ public final class JsonQueryParser {
       return false;
     }
     JsonArray arr = el.getAsJsonArray();
-    if (arr.size() < 1) {
+    if (arr.isEmpty()) {
       return false;
     }
     JsonElement head = arr.get(0);
@@ -759,62 +732,89 @@ public final class JsonQueryParser {
   }
 
   private String sliceOperatorRhs() {
-    int start = index;
     skipWhitespace();
-    start = index;
-    int i = index;
-    while (i < input.length() && !Character.isWhitespace(input.charAt(i))) {
-      i++;
-    }
-    int opEnd = i;
+    int operatorStart = index;
+    int operatorEnd = scanUntilWhitespace(operatorStart);
+    int rhsStart = skipWhitespace(operatorEnd);
 
-    int j = i;
-    while (j < input.length() && Character.isWhitespace(input.charAt(j))) {
-      j++;
-    }
-    int rhsStart = j;
-
-    int k = rhsStart;
-    if (k >= input.length()) {
-      return input.substring(start);
+    if (rhsStart >= input.length()) {
+      return input.substring(operatorStart);
     }
 
-    char ch = input.charAt(k);
-    if (ch == '"') {
-      k++;
-      while (k < input.length()) {
-        char c = input.charAt(k);
-        if (c == '\\' && k + 1 < input.length()) {
-          k += 2;
-          continue;
-        }
-        if (c == '"') {
-          k++;
-          break;
-        }
-        k++;
+    int rhsEnd = scanValue(rhsStart);
+    return input.substring(operatorStart, operatorEnd)
+        + " "
+        + input.substring(rhsStart, rhsEnd);
+  }
+
+  private int scanValue(int start) {
+    char first = input.charAt(start);
+    if (first == '"') {
+      return scanQuotedValue(start);
+    }
+    if (isIdentStart(first)) {
+      return scanIdentifier(start);
+    }
+    if (isDigit(first) || first == '-') {
+      return scanNumber(start);
+    }
+    return start + 1;
+  }
+
+  private int scanQuotedValue(int start) {
+    int cursor = start + 1;
+    while (cursor < input.length()) {
+      char current = input.charAt(cursor);
+      if (current == '\\' && cursor + 1 < input.length()) {
+        cursor += 2;
+      } else if (current == '"') {
+        return cursor + 1;
+      } else {
+        cursor++;
       }
-    } else if (isIdentStart(ch)) {
-      k++;
-      while (k < input.length() && isIdentPart(input.charAt(k))) {
-        k++;
-      }
-    } else if (isDigit(ch) || ch == '-') {
-      k++;
-      while (k < input.length()) {
-        char d = input.charAt(k);
-        if (!(isDigit(d) || d == '.' || d == 'e' || d == 'E' || d == '+' || d == '-')) {
-          break;
-        }
-        k++;
-      }
-    } else {
-      k++;
     }
+    return cursor;
+  }
 
-    String op = input.substring(start, opEnd);
-    String rhs = input.substring(rhsStart, k);
-    return op + " " + rhs;
+  private int scanIdentifier(int start) {
+    int cursor = start + 1;
+    while (cursor < input.length() && isIdentPart(input.charAt(cursor))) {
+      cursor++;
+    }
+    return cursor;
+  }
+
+  private int scanNumber(int start) {
+    int cursor = start + 1;
+    while (cursor < input.length() && isNumberCharacter(input.charAt(cursor))) {
+      cursor++;
+    }
+    return cursor;
+  }
+
+  private int scanUntilWhitespace(int start) {
+    int cursor = start;
+    while (cursor < input.length() && !Character.isWhitespace(input.charAt(cursor))) {
+      cursor++;
+    }
+    return cursor;
+  }
+
+  private int skipWhitespace(int start) {
+    int cursor = start;
+    while (cursor < input.length() && Character.isWhitespace(input.charAt(cursor))) {
+      cursor++;
+    }
+    return cursor;
+  }
+
+  private static boolean isNumberCharacter(char value) {
+    return isDigit(value)
+        || value == '.'
+        || value == 'e'
+        || value == 'E'
+        || value == '+'
+        || value == '-';
   }
 
   private String remainingFrom(int pos) {
@@ -832,57 +832,69 @@ public final class JsonQueryParser {
 
   private JsonElement parseNumberValue() throws JsonQueryParseException {
     int start = index;
+    parseNumberSign(start);
+    parseDigits(start);
+    parseFraction();
+    parseExponent();
 
-    if (consumeChar('-')) {
-      if (isEof() || !isDigit(peekChar())) {
-        throw JsonQueryParseException.valueExpected(start);
-      }
-    }
+    double value = Double.parseDouble(input.substring(start, index));
+    return numberPrimitive(value);
+  }
 
-    boolean sawDigit = false;
-    while (!isEof() && isDigit(peekChar())) {
-      sawDigit = true;
-      index++;
-    }
-
-    if (peekChar('.')) {
-      int dotPos = index;
-      index++;
-      if (isEof() || !isDigit(peekChar())) {
-        // suite expects "2." -> Property expected (pos: 2)
-        throw JsonQueryParseException.propertyExpected(dotPos + 1);
-      }
-      while (!isEof() && isDigit(peekChar())) {
-        index++;
-      }
-    }
-
-    if (!isEof() && (peekChar('e') || peekChar('E'))) {
-      int ePos = index;
-      index++;
-      if (!isEof() && (peekChar('+') || peekChar('-'))) {
-        index++;
-      }
-      if (isEof() || !isDigit(peekChar())) {
-        // 2.3e / 2.3e+ / 2.3e- : "Unexpected part 'e' (pos: 3)" etc.
-        String part = input.substring(ePos, Math.min(input.length(), ePos + (index - ePos)));
-        throw JsonQueryParseException.unexpectedPart(part, ePos);
-      }
-      while (!isEof() && isDigit(peekChar())) {
-        index++;
-      }
-    }
-
-    if (!sawDigit) {
+  private void parseNumberSign(int start) {
+    if (consumeChar('-') && (isEof() || !isDigit(peekChar()))) {
       throw JsonQueryParseException.valueExpected(start);
     }
+  }
 
-    String raw = input.substring(start, index);
-    double value = Double.parseDouble(raw);
+  private void parseDigits(int start) {
+    int digitsStart = index;
+    while (!isEof() && isDigit(peekChar())) {
+      index++;
+    }
+    if (index == digitsStart) {
+      throw JsonQueryParseException.valueExpected(start);
+    }
+  }
+
+  private void parseFraction() {
+    if (!peekChar('.')) {
+      return;
+    }
+
+    int dotPosition = index++;
+    if (isEof() || !isDigit(peekChar())) {
+      throw JsonQueryParseException.propertyExpected(dotPosition + 1);
+    }
+    while (!isEof() && isDigit(peekChar())) {
+      index++;
+    }
+  }
+
+  private void parseExponent() {
+    if (isEof() || (!peekChar('e') && !peekChar('E'))) {
+      return;
+    }
+
+    int exponentPosition = index++;
+    if (!isEof() && (peekChar('+') || peekChar('-'))) {
+      index++;
+    }
+    if (isEof() || !isDigit(peekChar())) {
+      throw JsonQueryParseException.unexpectedPart(
+          input.substring(exponentPosition, index),
+          exponentPosition);
+    }
+    while (!isEof() && isDigit(peekChar())) {
+      index++;
+    }
+  }
+
+  private static JsonPrimitive numberPrimitive(double value) {
     if (value == Math.rint(value)) {
-      long asLong = (long) value;
-      if (asLong >= Integer.MIN_VALUE && asLong <= Integer.MAX_VALUE) {
-        return new JsonPrimitive((int) asLong);
+      long integral = (long) value;
+      if (integral >= Integer.MIN_VALUE && integral <= Integer.MAX_VALUE) {
+        return new JsonPrimitive((int) integral);
       }
     }
     return new JsonPrimitive(value);
@@ -901,45 +913,43 @@ public final class JsonQueryParser {
       throw onError;
     }
 
-    StringBuilder sb = new StringBuilder();
+    StringBuilder value = new StringBuilder();
     while (!isEof()) {
-      char c = input.charAt(index);
-      if (c == '"') {
-        index++;
-        return sb.toString();
+      char current = input.charAt(index++);
+      if (current == '"') {
+        return value.toString();
       }
-      if (c == '\\') {
-        if (index + 1 >= input.length()) {
+      if (current == '\\') {
+        if (isEof()) {
           throw onError;
         }
-        char esc = input.charAt(index + 1);
-        switch (esc) {
-          case 'n': sb.append('\n'); break;
-          case 'r': sb.append('\r'); break;
-          case 't': sb.append('\t'); break;
-          case '"': sb.append('"'); break;
-          case '\\': sb.append('\\'); break;
-          default: sb.append(esc); break;
-        }
-        index += 2;
-        continue;
+        value.append(unescape(input.charAt(index++)));
+      } else {
+        value.append(current);
       }
-      sb.append(c);
-      index++;
     }
-
     throw onError;
   }
 
+  private static char unescape(char escaped) {
+    return switch (escaped) {
+      case 'n' -> '\n';
+      case 'r' -> '\r';
+      case 't' -> '\t';
+      case '"' -> '"';
+      case '\\' -> '\\';
+      default -> escaped;
+    };
+  }
+
   private void skipWhitespace() {
-    while (!isEof()) {
-      char c = input.charAt(index);
-      if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
-        index++;
-        continue;
-      }
-      break;
+    while (!isEof() && isWhitespace(input.charAt(index))) {
+      index++;
     }
+  }
+
+  private static boolean isWhitespace(char value) {
+    return value == ' ' || value == '\t' || value == '\n' || value == '\r';
   }
 
   private boolean peekKeyword(String keyword) {
