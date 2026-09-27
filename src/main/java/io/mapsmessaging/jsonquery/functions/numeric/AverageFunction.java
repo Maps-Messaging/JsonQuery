@@ -19,10 +19,7 @@
 
 package io.mapsmessaging.jsonquery.functions.numeric;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
@@ -37,48 +34,26 @@ public final class AverageFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (!rawArgs.isEmpty()) {
       throw new IllegalArgumentException("avg expects 0 arguments");
     }
+    return AverageFunction::average;
+  }
 
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        throw new IllegalArgumentException("Array expected");
-      }
+  private static JsonElement average(JsonElement data) {
+    List<Double> values = NumericArray.values(data);
+    if (values == null || values.isEmpty()) {
+      return NumericArray.nullValue();
+    }
 
-      JsonArray array = data.getAsJsonArray();
-      if (array.isEmpty()) {
-        return JsonNull.INSTANCE;
-      }
-
-      double sum = 0.0;
-      long count = 0;
-
-      for (JsonElement element : array) {
-        if (element == null || element.isJsonNull()) {
-          continue;
-        }
-        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
-          throw new IllegalArgumentException("Number expected");
-        }
-        sum += element.getAsDouble();
-        count++;
-      }
-
-      if (count == 0) {
-        return JsonNull.INSTANCE;
-      }
-
-      double avg = sum / (double) count;
-
-      if (avg == Math.rint(avg)) {
-        return new JsonPrimitive((long) avg);
-      }
-      return new JsonPrimitive(avg);
-    };
+    double sum = 0.0;
+    for (double value : values) {
+      sum += value;
+    }
+    return NumericArray.number(sum / values.size());
   }
 }

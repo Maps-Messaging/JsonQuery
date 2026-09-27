@@ -27,7 +27,7 @@ import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import java.util.List;
 import java.util.function.Function;
 
-public final class FlattenFunction implements JsonQueryFunction {
+public final class FlattenFunction extends AbstractFunction {
 
   @Override
   public String getName() {
@@ -35,38 +35,35 @@ public final class FlattenFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (!rawArgs.isEmpty()) {
-      throw new IllegalArgumentException("flatten expects 0 arguments");
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
+    requireArgCountExact(rawArgs, 0, "0 arguments");
+    return FlattenFunction::flatten;
+  }
+
+  private static JsonElement flatten(JsonElement data) {
+    if (data == null || data.isJsonNull() || !data.isJsonArray()) {
+      return JsonNull.INSTANCE;
     }
 
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
+    JsonArray output = new JsonArray();
+    for (JsonElement element : data.getAsJsonArray()) {
+      append(output, element);
+    }
+    return output;
+  }
+
+  private static void append(JsonArray output, JsonElement element) {
+    if (element == null || element.isJsonNull()) {
+      output.add(JsonNull.INSTANCE);
+    } else if (element.isJsonArray()) {
+      for (JsonElement inner : element.getAsJsonArray()) {
+        output.add(inner == null ? JsonNull.INSTANCE : inner);
       }
-      if (!data.isJsonArray()) {
-        return JsonNull.INSTANCE;
-      }
-
-      JsonArray input = data.getAsJsonArray();
-      JsonArray output = new JsonArray();
-
-      for (JsonElement element : input) {
-        if (element == null || element.isJsonNull()) {
-          output.add(JsonNull.INSTANCE);
-          continue;
-        }
-
-        if (element.isJsonArray()) {
-          for (JsonElement inner : element.getAsJsonArray()) {
-            output.add(inner == null ? JsonNull.INSTANCE : inner);
-          }
-        } else {
-          output.add(element);
-        }
-      }
-
-      return output;
-    };
+    } else {
+      output.add(element);
+    }
   }
 }

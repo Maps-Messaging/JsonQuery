@@ -19,46 +19,27 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.*;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public final class PickFunction implements JsonQueryFunction {
-  private static String tryExtractLiteralGetLeafKey(JsonElement selectorElement) {
-    if (selectorElement == null || !selectorElement.isJsonArray()) {
-      return null;
-    }
-    JsonArray array = selectorElement.getAsJsonArray();
-    if (array.size() < 2) {
-      return null;
-    }
+public final class PickFunction extends AbstractFunction {
 
-    JsonElement op = array.get(0);
-    if (op == null || !op.isJsonPrimitive()) {
-      return null;
-    }
-    JsonPrimitive opPrim = op.getAsJsonPrimitive();
-    if (!opPrim.isString() || !"get".equals(opPrim.getAsString())) {
-      return null;
-    }
+  private record LiteralSelector(
+      String key,
+      Function<JsonElement, JsonElement> selector) {
+  }
 
-    // all args must be string literals
-    for (int index = 1; index < array.size(); index++) {
-      JsonElement arg = array.get(index);
-      if (arg == null || !arg.isJsonPrimitive()) {
-        return null;
-      }
-      JsonPrimitive argPrim = arg.getAsJsonPrimitive();
-      if (!argPrim.isString()) {
-        return null;
-      }
-    }
-
-    // output key is the last path segment
-    return array.get(array.size() - 1).getAsString();
+  private record Selectors(
+      List<LiteralSelector> literal,
+      List<Function<JsonElement, JsonElement>> dynamic) {
   }
 
   @Override
@@ -67,96 +48,107 @@ public final class PickFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (rawArgs.isEmpty()) {
       throw new IllegalArgumentException("pick expects at least one selector");
     }
 
-    List<JsonElement> selectorElements = normalizeSelectors(rawArgs);
-
-    List<String> outputKeys = new ArrayList<>();
-    List<Function<JsonElement, JsonElement>> valueSelectors = new ArrayList<>();
-    List<Function<JsonElement, JsonElement>> dynamicKeySelectors = new ArrayList<>();
-
-    for (JsonElement selectorElement : selectorElements) {
-      String outputKey = tryExtractLiteralGetLeafKey(selectorElement);
-      if (outputKey != null) {
-        outputKeys.add(outputKey);
-        valueSelectors.add(compiler.compile(selectorElement));
-      } else {
-        dynamicKeySelectors.add(compiler.compile(selectorElement));
-      }
-    }
-
-    Function<JsonElement, JsonElement> pickOne = element -> {
-      if (element == null || element.isJsonNull() || !element.isJsonObject()) {
-        return JsonNull.INSTANCE;
-      }
-
-      JsonObject sourceObject = element.getAsJsonObject();
-      JsonObject resultObject = new JsonObject();
-
-      // literal get paths: key = leaf, value = selector result
-      for (int index = 0; index < outputKeys.size(); index++) {
-        String key = outputKeys.get(index);
-        JsonElement value = valueSelectors.get(index).apply(element);
-        if (value != null && !value.isJsonNull()) {
-          resultObject.add(key, value);
-        }
-      }
-
-      // dynamic keys: selector returns a string key to fetch from top-level
-      for (Function<JsonElement, JsonElement> selectorFunction : dynamicKeySelectors) {
-        JsonElement keyElement = selectorFunction.apply(element);
-        if (keyElement == null || keyElement.isJsonNull() || !keyElement.isJsonPrimitive()) {
-          continue;
-        }
-        JsonPrimitive primitive = keyElement.getAsJsonPrimitive();
-        if (!primitive.isString()) {
-          continue;
-        }
-        String key = primitive.getAsString();
-        JsonElement value = sourceObject.get(key);
-        if (value != null) {
-          resultObject.add(key, value);
-        }
-      }
-
-      return resultObject;
-    };
-
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-
-      if (data.isJsonArray()) {
-        JsonArray in = data.getAsJsonArray();
-        JsonArray out = new JsonArray();
-        for (JsonElement element : in) {
-          out.add(pickOne.apply(element));
-        }
-        return out;
-      }
-
-      return pickOne.apply(data);
-    };
+    Selectors selectors = compileSelectors(normalizeSelectors(rawArgs), compiler);
+    Function<JsonElement, JsonElement> pickOne = element -> pick(element, selectors);
+    return data -> apply(data, pickOne);
   }
 
-  private List<JsonElement> normalizeSelectors(List<JsonElement> rawArgs) {
-    if (rawArgs.size() == 1 && rawArgs.get(0) != null && rawArgs.get(0).isJsonArray()) {
-      JsonArray selectorArray = rawArgs.get(0).getAsJsonArray();
-      List<JsonElement> selectorElements = new ArrayList<>();
-      for (JsonElement selectorElement : selectorArray) {
-        selectorElements.add(selectorElement);
+  private static Selectors compileSelectors(
+      List<JsonElement> selectorElements,
+      JsonQueryCompiler compiler) {
+
+    List<LiteralSelector> literal = new ArrayList<>();
+    List<Function<JsonElement, JsonElement>> dynamic = new ArrayList<>();
+
+    for (JsonElement selectorElement : selectorElements) {
+      List<String> path = LiteralGetPath.strings(selectorElement);
+      Function<JsonElement, JsonElement> selector = compiler.compile(selectorElement);
+      if (path == null) {
+        dynamic.add(selector);
+      } else {
+        literal.add(new LiteralSelector(path.get(path.size() - 1), selector));
       }
-      return selectorElements;
+    }
+    return new Selectors(List.copyOf(literal), List.copyOf(dynamic));
+  }
+
+  private static JsonElement apply(
+      JsonElement data,
+      Function<JsonElement, JsonElement> pickOne) {
+
+    if (data == null || data.isJsonNull()) {
+      return JsonNull.INSTANCE;
+    }
+    if (!data.isJsonArray()) {
+      return pickOne.apply(data);
     }
 
-    List<JsonElement> selectorElements = new ArrayList<>();
-    for (JsonElement selectorElement : rawArgs) {
-      selectorElements.add(selectorElement);
+    JsonArray output = new JsonArray();
+    for (JsonElement element : data.getAsJsonArray()) {
+      output.add(pickOne.apply(element));
     }
-    return selectorElements;
+    return output;
+  }
+
+  private static JsonElement pick(JsonElement element, Selectors selectors) {
+    if (element == null || !element.isJsonObject()) {
+      return JsonNull.INSTANCE;
+    }
+
+    JsonObject result = new JsonObject();
+    addLiteralSelections(result, element, selectors.literal());
+    addDynamicSelections(result, element.getAsJsonObject(), selectors.dynamic());
+    return result;
+  }
+
+  private static void addLiteralSelections(
+      JsonObject result,
+      JsonElement element,
+      List<LiteralSelector> selectors) {
+
+    for (LiteralSelector selector : selectors) {
+      JsonElement value = selector.selector().apply(element);
+      if (value != null && !value.isJsonNull()) {
+        result.add(selector.key(), value);
+      }
+    }
+  }
+
+  private static void addDynamicSelections(
+      JsonObject result,
+      JsonObject source,
+      List<Function<JsonElement, JsonElement>> selectors) {
+
+    for (Function<JsonElement, JsonElement> selector : selectors) {
+      String key = string(selector.apply(source));
+      if (key != null && source.has(key)) {
+        result.add(key, source.get(key));
+      }
+    }
+  }
+
+  private static String string(JsonElement element) {
+    if (element == null || !element.isJsonPrimitive()) {
+      return null;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    return primitive.isString() ? primitive.getAsString() : null;
+  }
+
+  private static List<JsonElement> normalizeSelectors(List<JsonElement> rawArgs) {
+    if (rawArgs.size() == 1 && rawArgs.get(0) != null && rawArgs.get(0).isJsonArray()) {
+      List<JsonElement> selectors = new ArrayList<>();
+      rawArgs.get(0).getAsJsonArray().forEach(selectors::add);
+      return selectors;
+    }
+    return List.copyOf(rawArgs);
   }
 }

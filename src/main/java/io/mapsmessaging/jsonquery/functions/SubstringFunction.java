@@ -27,27 +27,7 @@ import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import java.util.List;
 import java.util.function.Function;
 
-public final class SubstringFunction implements JsonQueryFunction {
-
-  private static Integer readInt(JsonElement element) {
-    if (element == null || element.isJsonNull()) {
-      return null;
-    }
-    if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
-      return null;
-    }
-    return element.getAsInt();
-  }
-
-  private static int clamp(int value, int min, int max) {
-    if (value < min) {
-      return min;
-    }
-    if (value > max) {
-      return max;
-    }
-    return value;
-  }
+public final class SubstringFunction extends AbstractFunction {
 
   @Override
   public String getName() {
@@ -55,12 +35,11 @@ public final class SubstringFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs,
-                                                    JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
 
-    if (rawArgs.isEmpty() || rawArgs.size() > 3) {
-      throw new IllegalArgumentException("substring expects 1, 2, or 3 arguments");
-    }
+    requireArgCount(rawArgs, 1, 3, "1, 2, or 3 arguments");
 
     Function<JsonElement, JsonElement> valueExpression;
     Function<JsonElement, JsonElement> startExpression;
@@ -78,39 +57,51 @@ public final class SubstringFunction implements JsonQueryFunction {
     }
 
     Function<JsonElement, JsonElement> finalEndExpression = endExpression;
+    return data -> substring(
+        valueExpression.apply(data),
+        startExpression.apply(data),
+        finalEndExpression == null ? null : finalEndExpression.apply(data),
+        finalEndExpression != null);
+  }
 
-    return data -> {
-      JsonElement valueElement = valueExpression.apply(data);
-      if (valueElement == null || valueElement.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!valueElement.isJsonPrimitive() || !valueElement.getAsJsonPrimitive().isString()) {
-        return JsonNull.INSTANCE;
-      }
+  private static JsonElement substring(
+      JsonElement valueElement,
+      JsonElement startElement,
+      JsonElement endElement,
+      boolean hasEnd) {
 
-      String value = valueElement.getAsString();
+    String value = stringValue(valueElement);
+    Integer startIndex = intValue(startElement);
+    Integer endIndex = hasEnd ? intValue(endElement) : null;
 
-      Integer startIndex = readInt(startExpression.apply(data));
-      if (startIndex == null) {
-        return JsonNull.INSTANCE;
-      }
+    if (value == null || startIndex == null || (hasEnd && endIndex == null)) {
+      return JsonNull.INSTANCE;
+    }
 
-      Integer endIndex = null;
-      if (finalEndExpression != null) {
-        endIndex = readInt(finalEndExpression.apply(data));
-        if (endIndex == null) {
-          return JsonNull.INSTANCE;
-        }
-      }
+    int length = value.length();
+    int start = clamp(startIndex, 0, length);
+    int end = hasEnd ? clamp(endIndex, 0, length) : length;
 
-      int length = value.length();
-      int start = clamp(startIndex, 0, length);
-      int end = (endIndex == null) ? length : clamp(endIndex, 0, length);
+    return new JsonPrimitive(end < start ? "" : value.substring(start, end));
+  }
 
-      if (end < start) {
-        return new JsonPrimitive("");
-      }
-      return new JsonPrimitive(value.substring(start, end));
-    };
+  private static String stringValue(JsonElement element) {
+    if (element == null || !element.isJsonPrimitive()) {
+      return null;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    return primitive.isString() ? primitive.getAsString() : null;
+  }
+
+  private static Integer intValue(JsonElement element) {
+    if (element == null || !element.isJsonPrimitive()) {
+      return null;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    return primitive.isNumber() ? primitive.getAsInt() : null;
+  }
+
+  private static int clamp(int value, int min, int max) {
+    return Math.max(min, Math.min(value, max));
   }
 }
