@@ -26,6 +26,7 @@ import com.google.gson.JsonPrimitive;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class JsonQueryStringifier {
 
@@ -87,16 +88,31 @@ public final class JsonQueryStringifier {
       Map.entry("not in", "not in")
   );
 
+  private static final Map<String, Integer> PRECEDENCE = Map.ofEntries(
+      Map.entry("pipe", PREC_PIPE),
+      Map.entry("or", PREC_OR),
+      Map.entry("and", PREC_AND),
+      Map.entry("eq", PREC_EQ),
+      Map.entry("ne", PREC_EQ),
+      Map.entry("lt", PREC_CMP),
+      Map.entry("lte", PREC_CMP),
+      Map.entry("gt", PREC_CMP),
+      Map.entry("gte", PREC_CMP),
+      Map.entry("add", PREC_ADD),
+      Map.entry("subtract", PREC_ADD),
+      Map.entry("multiply", PREC_MUL),
+      Map.entry("divide", PREC_MUL),
+      Map.entry("mod", PREC_MUL),
+      Map.entry("pow", PREC_POW)
+  );
+
+  private static final Set<String> NON_ASSOCIATIVE =
+      Set.of("pow", "eq", "ne", "lt", "lte", "gt", "gte");
+  private static final Set<String> LEFT_ASSOCIATIVE =
+      Set.of("add", "subtract", "multiply", "divide", "mod", "and", "or", "in", "not in");
+
   private static int precedenceForCall(String head) {
-    if ("pipe".equals(head)) return PREC_PIPE;
-    if ("or".equals(head)) return PREC_OR;
-    if ("and".equals(head)) return PREC_AND;
-    if ("eq".equals(head) || "ne".equals(head)) return PREC_EQ;
-    if ("lt".equals(head) || "lte".equals(head) || "gt".equals(head) || "gte".equals(head)) return PREC_CMP;
-    if ("add".equals(head) || "subtract".equals(head)) return PREC_ADD;
-    if ("multiply".equals(head) || "divide".equals(head) || "mod".equals(head)) return PREC_MUL;
-    if ("pow".equals(head)) return PREC_POW;
-    return PREC_ATOM;
+    return PRECEDENCE.getOrDefault(head, PREC_ATOM);
   }
 
   private String stringifyExpr(JsonElement el, Context ctx, int indentLevel) {
@@ -389,16 +405,11 @@ public final class JsonQueryStringifier {
   }
 
   private boolean isNonAssociative(String op) {
-    return "pow".equals(op)
-        || "eq".equals(op) || "ne".equals(op)
-        || "lt".equals(op) || "lte".equals(op) || "gt".equals(op) || "gte".equals(op);
+    return NON_ASSOCIATIVE.contains(op);
   }
 
   private boolean isLeftAssociative(String op) {
-    return "add".equals(op) || "subtract".equals(op)
-        || "multiply".equals(op) || "divide".equals(op) || "mod".equals(op)
-        || "and".equals(op) || "or".equals(op)
-        || "in".equals(op) || "not in".equals(op);
+    return LEFT_ASSOCIATIVE.contains(op);
   }
 
   private String stringifyArrayLiteral(JsonArray arr, int indentLevel, boolean forceMultiline) {
