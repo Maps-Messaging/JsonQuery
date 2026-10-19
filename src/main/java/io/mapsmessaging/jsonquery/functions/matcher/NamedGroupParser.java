@@ -20,7 +20,7 @@
 package io.mapsmessaging.jsonquery.functions.matcher;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -30,39 +30,40 @@ public final class NamedGroupParser {
   }
 
   public static List<String> parse(String patternText) {
-    Set<String> names = new HashSet<>();
     if (patternText == null || patternText.isEmpty()) {
       return List.of();
     }
 
-    // crude but effective: find "(?<name>" not escaped
-    for (int i = 0; i < patternText.length() - 3; i++) {
-      char ch = patternText.charAt(i);
-      if (ch == '\\') {
-        i++;
-        continue;
-      }
-      if (ch == '(' && i + 3 < patternText.length()
-          && patternText.charAt(i + 1) == '?'
-          && patternText.charAt(i + 2) == '<') {
-
-        int start = i + 3;
-        int end = start;
-        while (end < patternText.length()) {
-          char c = patternText.charAt(end);
-          if (c == '>') {
-            break;
-          }
-          end++;
-        }
-        if (end < patternText.length() && end > start) {
-          String name = patternText.substring(start, end);
-          names.add(name);
-        }
-        i = end;
+    Set<String> names = new LinkedHashSet<>();
+    int index = 0;
+    while (index < patternText.length()) {
+      if (patternText.charAt(index) == '\\') {
+        index += 2;
+      } else if (isNamedGroupStart(patternText, index)) {
+        index = captureName(patternText, index, names);
+      } else {
+        index++;
       }
     }
-
     return new ArrayList<>(names);
+  }
+
+  private static boolean isNamedGroupStart(String pattern, int index) {
+    return index + 3 < pattern.length()
+        && pattern.charAt(index) == '('
+        && pattern.charAt(index + 1) == '?'
+        && pattern.charAt(index + 2) == '<';
+  }
+
+  private static int captureName(String pattern, int groupStart, Set<String> names) {
+    int nameStart = groupStart + 3;
+    int nameEnd = pattern.indexOf('>', nameStart);
+    if (nameEnd < 0) {
+      return pattern.length();
+    }
+    if (nameEnd > nameStart) {
+      names.add(pattern.substring(nameStart, nameEnd));
+    }
+    return nameEnd + 1;
   }
 }

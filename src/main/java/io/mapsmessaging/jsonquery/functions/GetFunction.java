@@ -19,7 +19,11 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.*;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.math.BigDecimal;
@@ -34,69 +38,91 @@ public final class GetFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (rawArgs.isEmpty()) {
       return data -> data == null ? JsonNull.INSTANCE : data;
     }
 
-    for (JsonElement rawArg : rawArgs) {
-      if (rawArg == null || rawArg.isJsonNull() || !rawArg.isJsonPrimitive()) {
-        throw new IllegalArgumentException("get expects path segments of type string or number");
-      }
+    PathSegment[] path = compilePath(rawArgs);
+    return data -> resolve(data, path);
+  }
 
-      JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
-      if (!primitive.isString() && !primitive.isNumber()) {
-        throw new IllegalArgumentException("get expects path segments of type string or number");
-      }
+  private static PathSegment[] compilePath(List<JsonElement> rawArgs) {
+    PathSegment[] path = new PathSegment[rawArgs.size()];
+    for (int index = 0; index < rawArgs.size(); index++) {
+      path[index] = pathSegment(rawArgs.get(index));
+    }
+    return path;
+  }
 
-      if (primitive.isNumber()) {
-        BigDecimal bigDecimal = primitive.getAsBigDecimal();
-        if (bigDecimal.scale() > 0) {
-          throw new IllegalArgumentException("get expects an integer array index");
-        }
-        if (bigDecimal.compareTo(BigDecimal.valueOf(Integer.MIN_VALUE)) < 0
-            || bigDecimal.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
-          throw new IllegalArgumentException("get array index out of int range");
-        }
-      }
+  private static PathSegment pathSegment(JsonElement rawArg) {
+    if (rawArg == null || !rawArg.isJsonPrimitive()) {
+      throw new IllegalArgumentException("get expects path segments of type string or number");
     }
 
-    return data -> {
-      JsonElement current = data == null ? JsonNull.INSTANCE : data;
+    JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
+    if (primitive.isString()) {
+      return new ObjectPathSegment(primitive.getAsString());
+    }
+    if (!primitive.isNumber()) {
+      throw new IllegalArgumentException("get expects path segments of type string or number");
+    }
+    return new ArrayPathSegment(arrayIndex(primitive.getAsBigDecimal()));
+  }
 
-      for (JsonElement rawArg : rawArgs) {
-        if (current == null || current.isJsonNull()) {
-          return JsonNull.INSTANCE;
-        }
+  private static int arrayIndex(BigDecimal value) {
+    if (value.scale() > 0) {
+      throw new IllegalArgumentException("get expects an integer array index");
+    }
+    if (value.compareTo(BigDecimal.valueOf(Integer.MIN_VALUE)) < 0
+        || value.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
+      throw new IllegalArgumentException("get array index out of int range");
+    }
+    return value.intValue();
+  }
 
-        JsonPrimitive primitive = rawArg.getAsJsonPrimitive();
-
-        if (primitive.isString()) {
-          if (!current.isJsonObject()) {
-            return JsonNull.INSTANCE;
-          }
-
-          JsonObject object = current.getAsJsonObject();
-          JsonElement next = object.get(primitive.getAsString());
-          current = next == null ? JsonNull.INSTANCE : next;
-          continue;
-        }
-
-        int index = primitive.getAsInt();
-        if (!current.isJsonArray()) {
-          return JsonNull.INSTANCE;
-        }
-
-        JsonArray array = current.getAsJsonArray();
-        if (index < 0 || index >= array.size()) {
-          return JsonNull.INSTANCE;
-        }
-
-        JsonElement next = array.get(index);
-        current = next == null ? JsonNull.INSTANCE : next;
+  private static JsonElement resolve(JsonElement data, PathSegment[] path) {
+    JsonElement current = data == null ? JsonNull.INSTANCE : data;
+    for (PathSegment segment : path) {
+      current = segment.resolve(current);
+      if (current.isJsonNull()) {
+        return JsonNull.INSTANCE;
       }
+    }
+    return current;
+  }
 
-      return current == null ? JsonNull.INSTANCE : current;
-    };
+  private interface PathSegment {
+    JsonElement resolve(JsonElement current);
+  }
+
+  private record ObjectPathSegment(String key) implements PathSegment {
+    @Override
+    public JsonElement resolve(JsonElement current) {
+      if (current == null || current.isJsonNull() || !current.isJsonObject()) {
+        return JsonNull.INSTANCE;
+      }
+      JsonObject object = current.getAsJsonObject();
+      JsonElement next = object.get(key);
+      return next == null ? JsonNull.INSTANCE : next;
+    }
+  }
+
+  private record ArrayPathSegment(int index) implements PathSegment {
+    @Override
+    public JsonElement resolve(JsonElement current) {
+      if (current == null || current.isJsonNull() || !current.isJsonArray()) {
+        return JsonNull.INSTANCE;
+      }
+      JsonArray array = current.getAsJsonArray();
+      if (index < 0 || index >= array.size()) {
+        return JsonNull.INSTANCE;
+      }
+      JsonElement next = array.get(index);
+      return next == null ? JsonNull.INSTANCE : next;
+    }
   }
 }

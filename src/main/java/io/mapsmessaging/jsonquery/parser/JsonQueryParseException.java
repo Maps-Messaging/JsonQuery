@@ -21,28 +21,19 @@ package io.mapsmessaging.jsonquery.parser;
 
 import lombok.Getter;
 
-
 public final class JsonQueryParseException extends RuntimeException {
+
   @Getter
   private final int position;
-  private final String message;
 
   public JsonQueryParseException(String message, int position) {
     super(message);
-    this.message = message;
     this.position = position;
-  }
-
-
-  @Override
-  public String getMessage(){
-    return message;
   }
 
   public static JsonQueryParseException keyExpected(int pos) {
     return new JsonQueryParseException("Key expected (pos: " + pos + ")", pos);
   }
-
 
   public static JsonQueryParseException propertyExpected(int pos) {
     return new JsonQueryParseException("Property expected (pos: " + pos + ")", pos);
@@ -53,20 +44,18 @@ public final class JsonQueryParseException extends RuntimeException {
   }
 
   public static JsonQueryParseException characterExpected(char ch, int pos) {
-    return new JsonQueryParseException("Character '" + ch + "' expected (pos: " + pos + ")", pos);
+    return new JsonQueryParseException(
+        "Character '" + ch + "' expected (pos: " + pos + ")",
+        pos);
   }
-
-  public static JsonQueryParseException unexpectedPart(int pos) {
-    return new JsonQueryParseException("Unexpected part '"+pos+"'", pos);
-  }
-
 
   public static JsonQueryParseException unexpectedPart(String part) {
     return new JsonQueryParseException("Unexpected part '" + part + "'", -1);
   }
 
   public static JsonQueryParseException unexpectedPart(String part, int pos) {
-    //return new JsonQueryParseException("Unexpected part '" + part + "'", pos);
-    return new JsonQueryParseException("Unexpected part '" + part + "' (pos: " + pos + ")", pos);
+    return new JsonQueryParseException(
+        "Unexpected part '" + part + "' (pos: " + pos + ")",
+        pos);
   }
 }

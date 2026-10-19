@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-public final class SplitFunction implements JsonQueryFunction {
+public final class SplitFunction extends AbstractFunction {
 
   @Override
   public String getName() {
@@ -37,78 +37,83 @@ public final class SplitFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs,
-                                                    JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
 
-    if (rawArgs.size() > 2) {
-      throw new IllegalArgumentException("split expects 0, 1, or 2 arguments");
+    requireArgCount(rawArgs, 0, 2, "0, 1, or 2 arguments");
+
+    Function<JsonElement, JsonElement> valueExpression =
+        rawArgs.isEmpty()
+            ? data -> data == null ? JsonNull.INSTANCE : data
+            : compiler.compile(rawArgs.get(0));
+
+    Function<JsonElement, JsonElement> delimiterExpression =
+        rawArgs.size() == 2 ? compiler.compile(rawArgs.get(1)) : null;
+
+    return data -> split(
+        valueExpression.apply(data),
+        delimiterExpression == null ? null : delimiterExpression.apply(data),
+        delimiterExpression != null);
+  }
+
+  private static JsonElement split(
+      JsonElement valueElement,
+      JsonElement delimiterElement,
+      boolean hasDelimiter) {
+
+    String value = stringValue(valueElement);
+    if (value == null) {
+      return JsonNull.INSTANCE;
+    }
+    if (value.isEmpty()) {
+      return new JsonArray();
     }
 
-    Function<JsonElement, JsonElement> valueExpression;
-    if (rawArgs.isEmpty()) {
-      valueExpression = data -> data == null ? JsonNull.INSTANCE : data;
-    } else {
-      valueExpression = compiler.compile(rawArgs.get(0));
+    if (!hasDelimiter) {
+      return splitWhitespace(value);
     }
 
-    Function<JsonElement, JsonElement> delimiterExpression = null;
-    if (rawArgs.size() == 2) {
-      delimiterExpression = compiler.compile(rawArgs.get(1));
+    String delimiter = stringValue(delimiterElement);
+    if (delimiter == null) {
+      return JsonNull.INSTANCE;
     }
+    return delimiter.isEmpty() ? splitCharacters(value) : splitLiteral(value, delimiter);
+  }
 
-    Function<JsonElement, JsonElement> finalDelimiterExpression = delimiterExpression;
+  private static String stringValue(JsonElement element) {
+    if (element == null || !element.isJsonPrimitive()) {
+      return null;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    return primitive.isString() ? primitive.getAsString() : null;
+  }
 
-    return data -> {
-      JsonElement valueElement = valueExpression.apply(data);
-      if (valueElement == null || valueElement.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!valueElement.isJsonPrimitive() || !valueElement.getAsJsonPrimitive().isString()) {
-        return JsonNull.INSTANCE;
-      }
+  private static JsonArray splitWhitespace(String value) {
+    JsonArray result = new JsonArray();
+    String trimmed = value.trim();
+    if (trimmed.isEmpty()) {
+      return result;
+    }
+    for (String part : trimmed.split("\\s+")) {
+      result.add(part);
+    }
+    return result;
+  }
 
-      String value = valueElement.getAsString();
-      if (value.isEmpty()) {
-        return new JsonArray();
-      }
+  private static JsonArray splitCharacters(String value) {
+    JsonArray result = new JsonArray();
+    for (int index = 0; index < value.length(); index++) {
+      result.add(String.valueOf(value.charAt(index)));
+    }
+    return result;
+  }
 
-      String delimiter = null;
-      if (finalDelimiterExpression != null) {
-        JsonElement delimiterElement = finalDelimiterExpression.apply(data);
-        if (delimiterElement == null || delimiterElement.isJsonNull()) {
-          return JsonNull.INSTANCE;
-        }
-        if (!delimiterElement.isJsonPrimitive() || !delimiterElement.getAsJsonPrimitive().isString()) {
-          return JsonNull.INSTANCE;
-        }
-        delimiter = delimiterElement.getAsString();
-      }
-
-      JsonArray out = new JsonArray();
-
-      if (delimiter == null) {
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-          return out;
-        }
-        for (String part : trimmed.split("\\s+")) {
-          out.add(new JsonPrimitive(part));
-        }
-        return out;
-      }
-
-      if (delimiter.isEmpty()) {
-        for (int i = 0; i < value.length(); i++) {
-          out.add(new JsonPrimitive(String.valueOf(value.charAt(i))));
-        }
-        return out;
-      }
-
-      String[] parts = value.split(Pattern.quote(delimiter), -1);
-      for (String part : parts) {
-        out.add(new JsonPrimitive(part));
-      }
-      return out;
-    };
+  private static JsonArray splitLiteral(String value, String delimiter) {
+    JsonArray result = new JsonArray();
+    for (String part : value.split(Pattern.quote(delimiter), -1)) {
+      result.add(part);
+    }
+    return result;
   }
 }

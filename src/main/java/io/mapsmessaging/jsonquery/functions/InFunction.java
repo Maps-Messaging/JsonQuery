@@ -35,38 +35,39 @@ public final class InFunction extends AbstractFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     requireArgCountExact(rawArgs, 2, "2 arguments: in(value, array)");
-    Function<JsonElement, JsonElement> valueExpr = compileArg(rawArgs.get(0), compiler);
-    Function<JsonElement, JsonElement> arrayExpr = compileArg(rawArgs.get(1), compiler);
+    Function<JsonElement, JsonElement> valueExpression = compileArg(rawArgs.get(0), compiler);
+    Function<JsonElement, JsonElement> arrayExpression = compileArg(rawArgs.get(1), compiler);
 
-    return data -> {
-      JsonElement value = valueExpr.apply(data);
-      JsonElement arrayValue = arrayExpr.apply(data);
+    return data -> new JsonPrimitive(
+        contains(valueExpression.apply(data), arrayExpression.apply(data)));
+  }
 
-      if (JsonQueryFunction.isNull(arrayValue)) {
-        return new JsonPrimitive(false);
-      }
-      if (!arrayValue.isJsonArray()) {
-        throw new IllegalArgumentException("Array expected");
-      }
+  private static boolean contains(JsonElement value, JsonElement arrayValue) {
+    if (JsonQueryFunction.isNull(arrayValue)) {
+      return false;
+    }
+    if (!arrayValue.isJsonArray()) {
+      throw new IllegalArgumentException("Array expected");
+    }
 
-      JsonArray array = arrayValue.getAsJsonArray();
-      for (JsonElement element : array) {
-        if (element == null) {
-          continue;
-        }
-        if (value == null) {
-          if (element.isJsonNull()) {
-            return new JsonPrimitive(true);
-          }
-          continue;
-        }
-        if (value.equals(element)) {
-          return new JsonPrimitive(true);
-        }
+    JsonArray array = arrayValue.getAsJsonArray();
+    for (JsonElement element : array) {
+      if (sameValue(value, element)) {
+        return true;
       }
-      return new JsonPrimitive(false);
-    };
+    }
+    return false;
+  }
+
+  private static boolean sameValue(JsonElement left, JsonElement right) {
+    if (left == null) {
+      return right != null && right.isJsonNull();
+    }
+    return right != null && left.equals(right);
   }
 }

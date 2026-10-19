@@ -26,6 +26,7 @@ import com.google.gson.JsonPrimitive;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class JsonQueryStringifier {
 
@@ -87,67 +88,82 @@ public final class JsonQueryStringifier {
       Map.entry("not in", "not in")
   );
 
+  private static final Map<String, Integer> PRECEDENCE = Map.ofEntries(
+      Map.entry("pipe", PREC_PIPE),
+      Map.entry("or", PREC_OR),
+      Map.entry("and", PREC_AND),
+      Map.entry("eq", PREC_EQ),
+      Map.entry("ne", PREC_EQ),
+      Map.entry("lt", PREC_CMP),
+      Map.entry("lte", PREC_CMP),
+      Map.entry("gt", PREC_CMP),
+      Map.entry("gte", PREC_CMP),
+      Map.entry("add", PREC_ADD),
+      Map.entry("subtract", PREC_ADD),
+      Map.entry("multiply", PREC_MUL),
+      Map.entry("divide", PREC_MUL),
+      Map.entry("mod", PREC_MUL),
+      Map.entry("pow", PREC_POW)
+  );
+
+  private static final Set<String> NON_ASSOCIATIVE =
+      Set.of("pow", "eq", "ne", "lt", "lte", "gt", "gte");
+  private static final Set<String> LEFT_ASSOCIATIVE =
+      Set.of("add", "subtract", "multiply", "divide", "mod", "and", "or", "in", "not in");
+
   private static int precedenceForCall(String head) {
-    if ("pipe".equals(head)) return PREC_PIPE;
-    if ("or".equals(head)) return PREC_OR;
-    if ("and".equals(head)) return PREC_AND;
-    if ("eq".equals(head) || "ne".equals(head)) return PREC_EQ;
-    if ("lt".equals(head) || "lte".equals(head) || "gt".equals(head) || "gte".equals(head)) return PREC_CMP;
-    if ("add".equals(head) || "subtract".equals(head)) return PREC_ADD;
-    if ("multiply".equals(head) || "divide".equals(head) || "mod".equals(head)) return PREC_MUL;
-    if ("pow".equals(head)) return PREC_POW;
-    return PREC_ATOM;
+    return PRECEDENCE.getOrDefault(head, PREC_ATOM);
   }
 
-  private String stringifyExpr(JsonElement el, Context ctx, int indentLevel) {
-    if (el == null || el.isJsonNull()) {
+  private String stringifyExpr(JsonElement element, Context context, int indentLevel) {
+    if (element == null || element.isJsonNull()) {
       return "null";
     }
-    if (el.isJsonPrimitive()) {
-      return stringifyPrimitive(el.getAsJsonPrimitive());
+    if (element.isJsonPrimitive()) {
+      return stringifyPrimitive(element.getAsJsonPrimitive());
     }
-    if (el.isJsonObject()) {
-      return stringifyObjectLiteral(el.getAsJsonObject(), ctx, indentLevel);
+    if (element.isJsonObject()) {
+      return stringifyObjectLiteral(element.getAsJsonObject(), context, indentLevel);
     }
-    if (!el.isJsonArray()) {
+    if (!element.isJsonArray()) {
+      return "";
+    }
+    return stringifyArrayExpression(element.getAsJsonArray(), context, indentLevel);
+  }
+
+  private String stringifyArrayExpression(
+      JsonArray array,
+      Context context,
+      int indentLevel) {
+
+    if (array.isEmpty()) {
       return "";
     }
 
-    JsonArray arr = el.getAsJsonArray();
-    if (arr.isEmpty()) {
-      return "";
-    }
-
-    String head = asString(arr.get(0));
+    String head = asString(array.get(0));
     if (head == null) {
       return "";
     }
 
-    if ("get".equals(head)) {
-      return stringifyGet(arr);
-    }
+    return switch (head) {
+      case "get" -> stringifyGet(array);
+      case "array" -> stringifyArrayLiteral(
+          array,
+          indentLevel,
+          context == Context.TOP || context == Context.OBJECT_VALUE);
+      case "object" -> stringifyObjectCall(array, context, indentLevel);
+      case "pipe" -> stringifyPipe(array, indentLevel);
+      default -> OP_TO_TOKEN.containsKey(head)
+          ? stringifyOperatorCall(head, array, indentLevel)
+          : stringifyFunctionCall(head, array, indentLevel);
+    };
+  }
 
-    if ("array".equals(head)) {
-      boolean forceMultiline = (ctx == Context.TOP) || (ctx == Context.OBJECT_VALUE);
-      return stringifyArrayLiteral(arr, indentLevel, forceMultiline);
+  private String stringifyObjectCall(JsonArray array, Context context, int indentLevel) {
+    if (array.size() < 2 || !array.get(1).isJsonObject()) {
+      return "{}";
     }
-
-    if ("object".equals(head)) {
-      if (arr.size() < 2 || !arr.get(1).isJsonObject()) {
-        return "{}";
-      }
-      return stringifyObjectLiteral(arr.get(1).getAsJsonObject(), ctx, indentLevel);
-    }
-
-    if ("pipe".equals(head)) {
-      return stringifyPipe(arr, indentLevel);
-    }
-
-    if (OP_TO_TOKEN.containsKey(head)) {
-      return stringifyOperatorCall(head, arr, indentLevel);
-    }
-
-    return stringifyFunctionCall(head, arr, indentLevel);
+    return stringifyObjectLiteral(array.get(1).getAsJsonObject(), context, indentLevel);
   }
 
   private String stringifyPrimitive(JsonPrimitive prim) {
@@ -193,61 +209,41 @@ public final class JsonQueryStringifier {
     return sb.toString();
   }
 
-  private String stringifyFunctionCall(String name, JsonArray arr, int indentLevel) {
-    List<JsonElement> args = new ArrayList<>();
-    for (int i = 1; i < arr.size(); i++) {
-      args.add(arr.get(i));
-    }
-
-    if (args.isEmpty()) {
+  private String stringifyFunctionCall(String name, JsonArray array, int indentLevel) {
+    List<JsonElement> arguments = tail(array);
+    if (arguments.isEmpty()) {
       return name + "()";
     }
 
-    boolean forceMultiline = false;
-
-    // Suite rule: sort(..., "asc"/"desc") must be multiline
-    if ("sort".equals(name) && args.size() >= 2) {
-      JsonElement last = args.get(args.size() - 1);
-      if (last != null && last.isJsonPrimitive() && last.getAsJsonPrimitive().isString()) {
-        String v = last.getAsString();
-        if ("asc".equals(v) || "desc".equals(v)) {
-          forceMultiline = false;
-        }
-      }
+    if ("map".equals(name)
+        && arguments.size() == 1
+        && isObjectLiteralCall(arguments.get(0))) {
+      JsonObject object = arguments.get(0).getAsJsonArray().get(1).getAsJsonObject();
+      return name + "(" + stringifyObjectLiteral(object, Context.FUNC_ARG, indentLevel) + ")";
     }
 
-    // Suite rule: map({ ... }) uses parentheses but object starts immediately after '(' (no extra newline)
-    if ("map".equals(name) && args.size() == 1 && isObjectLiteralCall(args.get(0))) {
-      JsonArray objCall = args.get(0).getAsJsonArray();
-      JsonObject obj = objCall.get(1).getAsJsonObject();
-      String renderedObject = stringifyObjectLiteral(obj, Context.FUNC_ARG, indentLevel);
-      return name + "(" + renderedObject + ")";
-    }
-
-    String singleLine = buildFunctionSingleLine(name, args, indentLevel);
-    if (!forceMultiline
-        && singleLine.indexOf('\n') < 0
-        && singleLine.length() <= options.getMaxLineLength()) {
+    String singleLine = buildFunctionSingleLine(name, arguments, indentLevel);
+    if (isWithinLineLimit(singleLine)) {
       return singleLine;
     }
+    return buildFunctionMultiline(name, arguments, indentLevel);
+  }
 
-    StringBuilder sb = new StringBuilder();
-    sb.append(name).append("(\n");
+  private String buildFunctionMultiline(
+      String name,
+      List<JsonElement> arguments,
+      int indentLevel) {
 
-    String argIndent = indent(indentLevel + 1);
-    for (int i = 0; i < args.size(); i++) {
-      sb.append(argIndent)
-          .append(stringifyExpr(args.get(i), Context.FUNC_ARG, indentLevel + 1));
+    StringBuilder result = new StringBuilder(name).append("(\n");
+    String argumentIndent = indent(indentLevel + 1);
 
-      if (i < args.size() - 1) {
-        sb.append(",\n");
-      } else {
-        sb.append('\n');
-      }
+    for (int index = 0; index < arguments.size(); index++) {
+      result.append(argumentIndent)
+          .append(stringifyExpr(arguments.get(index), Context.FUNC_ARG, indentLevel + 1))
+          .append(index < arguments.size() - 1 ? ",\n" : "\n");
     }
 
-    sb.append(indent(indentLevel)).append(")");
-    return sb.toString();
+    return result.append(indent(indentLevel)).append(")").toString();
   }
 
   private String buildFunctionSingleLine(String name, List<JsonElement> args, int indentLevel) {
@@ -261,11 +257,8 @@ public final class JsonQueryStringifier {
     return sb.toString();
   }
 
-  private String stringifyPipe(JsonArray arr, int indentLevel) {
-    List<JsonElement> stages = new ArrayList<>();
-    for (int i = 1; i < arr.size(); i++) {
-      stages.add(arr.get(i));
-    }
+  private String stringifyPipe(JsonArray array, int indentLevel) {
+    List<JsonElement> stages = tail(array);
     if (stages.isEmpty()) {
       return "";
     }
@@ -273,71 +266,69 @@ public final class JsonQueryStringifier {
       return stringifyExpr(stages.get(0), Context.PIPE_STAGE, indentLevel);
     }
 
-    // If any stage is an object literal call, the suite wants multiline pipe formatting.
-    boolean hasObjectLiteralStage = false;
-    for (JsonElement stage : stages) {
-      if (isObjectLiteralCall(stage)) {
-        hasObjectLiteralStage = true;
-        break;
-      }
-    }
+    boolean canUseSingleLine =
+        stages.size() <= 3 && stages.stream().noneMatch(this::isObjectLiteralCall);
 
-    // Single-line preference:
-    // - always try for up to 3 stages (suite expects 2 | 3 | 4 on one line)
-    // - also try for 2 stages even if not primitives (e.g. (2 and 3) | 4)
-    boolean trySingleLine = !hasObjectLiteralStage && (stages.size() <= 3);
-
-    if (trySingleLine) {
-      StringBuilder single = new StringBuilder();
-      for (int i = 0; i < stages.size(); i++) {
-        if (i > 0) single.append(" | ");
-        single.append(stringifyExpr(stages.get(i), Context.PIPE_STAGE, indentLevel));
-      }
-      String singleLine = single.toString();
-      if (singleLine.indexOf('\n') < 0 && singleLine.length() <= options.getMaxLineLength()) {
+    if (canUseSingleLine) {
+      String singleLine = buildPipeSingleLine(stages, indentLevel);
+      if (isWithinLineLimit(singleLine)) {
         return singleLine;
       }
     }
-
-    StringBuilder sb = new StringBuilder();
-    sb.append(stringifyExpr(stages.get(0), Context.PIPE_STAGE, indentLevel));
-
-    String pipeIndent = indent(indentLevel + 1);
-    for (int i = 1; i < stages.size(); i++) {
-      sb.append('\n').append(pipeIndent).append("| ");
-      sb.append(stringifyExpr(stages.get(i), Context.PIPE_STAGE, indentLevel + 1));
-    }
-    return sb.toString();
+    return buildPipeMultiline(stages, indentLevel);
   }
 
-  private String stringifyOperatorCall(String head, JsonArray arr, int indentLevel) {
-    String token = OP_TO_TOKEN.get(head);
-    int parentPrec = precedenceForCall(head);
-
-    List<JsonElement> args = new ArrayList<>();
-    for (int i = 1; i < arr.size(); i++) {
-      args.add(arr.get(i));
+  private String buildPipeSingleLine(List<JsonElement> stages, int indentLevel) {
+    StringBuilder result = new StringBuilder();
+    for (JsonElement stage : stages) {
+      if (!result.isEmpty()) {
+        result.append(" | ");
+      }
+      result.append(stringifyExpr(stage, Context.PIPE_STAGE, indentLevel));
     }
-    if (args.size() < 2) {
+    return result.toString();
+  }
+
+  private String buildPipeMultiline(List<JsonElement> stages, int indentLevel) {
+    StringBuilder result = new StringBuilder(
+        stringifyExpr(stages.get(0), Context.PIPE_STAGE, indentLevel));
+    String pipeIndent = indent(indentLevel + 1);
+
+    for (int index = 1; index < stages.size(); index++) {
+      result.append('\n')
+          .append(pipeIndent)
+          .append("| ")
+          .append(stringifyExpr(stages.get(index), Context.PIPE_STAGE, indentLevel + 1));
+    }
+    return result.toString();
+  }
+
+  private String stringifyOperatorCall(String head, JsonArray array, int indentLevel) {
+    List<JsonElement> arguments = tail(array);
+    if (arguments.size() < 2) {
       return "";
     }
 
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < args.size(); i++) {
-      if (i > 0) {
-        sb.append(' ').append(token).append(' ');
+    String token = OP_TO_TOKEN.get(head);
+    int parentPrecedence = precedenceForCall(head);
+    StringBuilder result = new StringBuilder();
+
+    for (int index = 0; index < arguments.size(); index++) {
+      if (index > 0) {
+        result.append(' ').append(token).append(' ');
       }
 
-      JsonElement childEl = args.get(i);
-      Context childCtx = (i == 0) ? Context.OP_LEFT : Context.OP_RIGHT;
-
-      String rendered = stringifyExpr(childEl, childCtx, indentLevel);
-      rendered = maybeWrapForOperator(head, parentPrec, childEl, i, rendered);
-
-      sb.append(rendered);
+      JsonElement child = arguments.get(index);
+      Context childContext = index == 0 ? Context.OP_LEFT : Context.OP_RIGHT;
+      String rendered = stringifyExpr(child, childContext, indentLevel);
+      result.append(maybeWrapForOperator(
+          head,
+          parentPrecedence,
+          child,
+          index,
+          rendered));
     }
-
-    return sb.toString();
+    return result.toString();
   }
 
   private String maybeWrapForOperator(String parentOp, int parentPrec, JsonElement childEl, int childIndex, String rendered) {
@@ -368,203 +359,151 @@ public final class JsonQueryStringifier {
       return rendered;
     }
 
-    // Same precedence: preserve AST shape.
-    if (isNonAssociative(parentOp) && parentOp.equals(childHead)) {
+    if (needsSamePrecedenceParentheses(parentOp, childHead, childIndex)
+        || "pipe".equals(childHead)) {
       return "(" + rendered + ")";
     }
-
-    if ("pow".equals(parentOp) && "pow".equals(childHead)) {
-      return "(" + rendered + ")";
-    }
-
-    if (childIndex > 0 && isLeftAssociative(parentOp) && childPrec == parentPrec) {
-      return "(" + rendered + ")";
-    }
-
-    if ("pipe".equals(childHead)) {
-      return "(" + rendered + ")";
-    }
-
     return rendered;
   }
 
-  private boolean isNonAssociative(String op) {
-    return "pow".equals(op)
-        || "eq".equals(op) || "ne".equals(op)
-        || "lt".equals(op) || "lte".equals(op) || "gt".equals(op) || "gte".equals(op);
+  private static boolean needsSamePrecedenceParentheses(
+      String parentOp,
+      String childHead,
+      int childIndex) {
+
+    return (NON_ASSOCIATIVE.contains(parentOp) && parentOp.equals(childHead))
+        || (childIndex > 0 && LEFT_ASSOCIATIVE.contains(parentOp));
   }
 
-  private boolean isLeftAssociative(String op) {
-    return "add".equals(op) || "subtract".equals(op)
-        || "multiply".equals(op) || "divide".equals(op) || "mod".equals(op)
-        || "and".equals(op) || "or".equals(op)
-        || "in".equals(op) || "not in".equals(op);
-  }
+  private String stringifyArrayLiteral(
+      JsonArray array,
+      int indentLevel,
+      boolean forceMultiline) {
 
-  private String stringifyArrayLiteral(JsonArray arr, int indentLevel, boolean forceMultiline) {
-    List<JsonElement> elems = new ArrayList<>();
-    for (int i = 1; i < arr.size(); i++) {
-      elems.add(arr.get(i));
-    }
-
+    List<JsonElement> elements = tail(array);
     if (!forceMultiline) {
-      StringBuilder single = new StringBuilder();
-      single.append('[');
-      for (int i = 0; i < elems.size(); i++) {
-        if (i > 0) single.append(", ");
-        single.append(stringifyExpr(elems.get(i), Context.ARRAY_ELEM, indentLevel));
-      }
-      single.append(']');
-      String singleLine = single.toString();
-      if (singleLine.length() <= options.getMaxLineLength()) {
+      String singleLine = buildArraySingleLine(elements, indentLevel);
+      if (isWithinLineLimit(singleLine)) {
         return singleLine;
       }
     }
-
-    StringBuilder sb = new StringBuilder();
-    sb.append("[\n");
-    String elemIndent = indent(indentLevel + 1);
-    for (int i = 0; i < elems.size(); i++) {
-      sb.append(elemIndent);
-      sb.append(stringifyExpr(elems.get(i), Context.ARRAY_ELEM, indentLevel + 1));
-      if (i < elems.size() - 1) {
-        sb.append(",\n");
-      } else {
-        sb.append('\n');
-      }
-    }
-    sb.append(indent(indentLevel)).append("]");
-    return sb.toString();
+    return buildArrayMultiline(elements, indentLevel);
   }
 
-  private String stringifyObjectLiteral(JsonObject obj, Context ctx, int indentLevel) {
-    // Rule: object used as a pipe stage must be multiline.
-    boolean forceMultiline = (ctx == Context.PIPE_STAGE);
-
-    // Rule: if any value is a pipe call, object must be multiline.
-    if (!forceMultiline) {
-      for (String key : obj.keySet()) {
-        if (isPipeCall(obj.get(key))) {
-          forceMultiline = true;
-          break;
-        }
+  private String buildArraySingleLine(List<JsonElement> elements, int indentLevel) {
+    StringBuilder result = new StringBuilder("[");
+    for (int index = 0; index < elements.size(); index++) {
+      if (index > 0) {
+        result.append(", ");
       }
+      result.append(stringifyExpr(elements.get(index), Context.ARRAY_ELEM, indentLevel));
     }
+    return result.append(']').toString();
+  }
+
+  private String buildArrayMultiline(List<JsonElement> elements, int indentLevel) {
+    StringBuilder result = new StringBuilder("[\n");
+    String elementIndent = indent(indentLevel + 1);
+
+    for (int index = 0; index < elements.size(); index++) {
+      result.append(elementIndent)
+          .append(stringifyExpr(elements.get(index), Context.ARRAY_ELEM, indentLevel + 1))
+          .append(index < elements.size() - 1 ? ",\n" : "\n");
+    }
+    return result.append(indent(indentLevel)).append(']').toString();
+  }
+
+  private String stringifyObjectLiteral(
+      JsonObject object,
+      Context context,
+      int indentLevel) {
+
+    boolean forceMultiline =
+        context == Context.PIPE_STAGE
+            || object.entrySet().stream().anyMatch(entry -> isPipeCall(entry.getValue()));
 
     if (!forceMultiline) {
-      String singleLine = buildObjectSingleLine(obj, indentLevel);
-      if (singleLine != null && singleLine.length() <= options.getMaxLineLength()) {
+      String singleLine = buildObjectSingleLine(object, indentLevel);
+      if (singleLine != null && isWithinLineLimit(singleLine)) {
         return singleLine;
       }
     }
-
-    // Fallback: multiline formatting.
-    StringBuilder sb = new StringBuilder();
-    sb.append("{\n");
-
-    String kvIndent = indent(indentLevel + 1);
-
-    int count = 0;
-    int size = obj.size();
-    for (String key : obj.keySet()) {
-      sb.append(kvIndent).append(formatObjectKey(key)).append(": ");
-
-      JsonElement valueEl = obj.get(key);
-
-      String value;
-      if (isArrayLiteralCall(valueEl)) {
-        value = stringifyArrayLiteral(valueEl.getAsJsonArray(), indentLevel + 1, true);
-      } else {
-        value = stringifyExpr(valueEl, Context.OBJECT_VALUE, indentLevel + 1);
-      }
-
-      sb.append(value);
-
-      count++;
-      if (count < size) {
-        sb.append(",\n");
-      } else {
-        sb.append('\n');
-      }
-    }
-
-    sb.append(indent(indentLevel)).append("}");
-    return sb.toString();
+    return buildObjectMultiline(object, indentLevel);
   }
 
-  private String buildObjectSingleLine(JsonObject obj, int indentLevel) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{ ");
+  private String buildObjectMultiline(JsonObject object, int indentLevel) {
+    StringBuilder result = new StringBuilder("{\n");
+    String keyIndent = indent(indentLevel + 1);
+    int index = 0;
 
-    int count = 0;
+    for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+      result.append(keyIndent)
+          .append(formatObjectKey(entry.getKey()))
+          .append(": ")
+          .append(stringifyObjectValue(entry.getValue(), indentLevel + 1))
+          .append(++index < object.size() ? ",\n" : "\n");
+    }
 
-    for (String key : obj.keySet()) {
-      if (count > 0) {
-        sb.append(", ");
-      }
+    return result.append(indent(indentLevel)).append('}').toString();
+  }
 
-      sb.append(formatObjectKey(key)).append(": ");
+  private String stringifyObjectValue(JsonElement value, int indentLevel) {
+    if (isArrayLiteralCall(value)) {
+      return stringifyArrayLiteral(value.getAsJsonArray(), indentLevel, true);
+    }
+    return stringifyExpr(value, Context.OBJECT_VALUE, indentLevel);
+  }
 
-      JsonElement valueEl = obj.get(key);
+  private String buildObjectSingleLine(JsonObject object, int indentLevel) {
+    StringBuilder result = new StringBuilder("{ ");
+    int index = 0;
 
-      // If any value is a pipe call, object should not be single-line.
-      if (isPipeCall(valueEl)) {
+    for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+      if (isPipeCall(entry.getValue())) {
         return null;
       }
 
-      String renderedValue;
-      if (isArrayLiteralCall(valueEl)) {
-        renderedValue = stringifyArrayLiteral(valueEl.getAsJsonArray(), indentLevel, false);
-      } else {
-        renderedValue = stringifyExpr(valueEl, Context.OBJECT_VALUE, indentLevel);
-      }
+      String renderedValue = isArrayLiteralCall(entry.getValue())
+          ? stringifyArrayLiteral(entry.getValue().getAsJsonArray(), indentLevel, false)
+          : stringifyExpr(entry.getValue(), Context.OBJECT_VALUE, indentLevel);
 
       if (renderedValue.indexOf('\n') >= 0) {
         return null;
       }
 
-      sb.append(renderedValue);
-      count++;
+      if (index++ > 0) {
+        result.append(", ");
+      }
+      result.append(formatObjectKey(entry.getKey()))
+          .append(": ")
+          .append(renderedValue);
     }
 
-    sb.append(" }");
-    return sb.toString();
+    return result.append(" }").toString();
   }
 
-  private boolean isPipeCall(JsonElement el) {
-    if (el == null || !el.isJsonArray()) {
-      return false;
-    }
-    JsonArray a = el.getAsJsonArray();
-    if (a.isEmpty()) {
-      return false;
-    }
-    String head = asString(a.get(0));
-    return "pipe".equals(head);
+  private boolean isPipeCall(JsonElement element) {
+    return isCall(element, "pipe", 1);
   }
 
-  private boolean isArrayLiteralCall(JsonElement el) {
-    if (el == null || !el.isJsonArray()) {
-      return false;
-    }
-    JsonArray a = el.getAsJsonArray();
-    if (a.isEmpty()) {
-      return false;
-    }
-    String head = asString(a.get(0));
-    return "array".equals(head);
+  private boolean isArrayLiteralCall(JsonElement element) {
+    return isCall(element, "array", 1);
   }
 
-  private boolean isObjectLiteralCall(JsonElement el) {
-    if (el == null || !el.isJsonArray()) {
+  private boolean isObjectLiteralCall(JsonElement element) {
+    if (!isCall(element, "object", 2)) {
       return false;
     }
-    JsonArray a = el.getAsJsonArray();
-    if (a.size() < 2 || !a.get(1).isJsonObject()) {
+    return element.getAsJsonArray().get(1).isJsonObject();
+  }
+
+  private static boolean isCall(JsonElement element, String name, int minimumSize) {
+    if (element == null || !element.isJsonArray()) {
       return false;
     }
-    String head = asString(a.get(0));
-    return "object".equals(head);
+
+    JsonArray array = element.getAsJsonArray();
+    return array.size() >= minimumSize && name.equals(asString(array.get(0)));
   }
 
   private String formatObjectKey(String key) {
@@ -611,25 +550,39 @@ public final class JsonQueryStringifier {
     return isIdentStart(ch) || (ch >= '0' && ch <= '9');
   }
 
-  private String quoteString(String s) {
-    if (s == null) {
+  private String quoteString(String value) {
+    if (value == null) {
       return "null";
     }
-    StringBuilder sb = new StringBuilder();
-    sb.append('"');
-    for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
-      switch (c) {
-        case '\\': sb.append("\\\\"); break;
-        case '"': sb.append("\\\""); break;
-        case '\n': sb.append("\\n"); break;
-        case '\r': sb.append("\\r"); break;
-        case '\t': sb.append("\\t"); break;
-        default: sb.append(c); break;
-      }
+
+    StringBuilder result = new StringBuilder().append('"');
+    for (int index = 0; index < value.length(); index++) {
+      appendEscaped(result, value.charAt(index));
     }
-    sb.append('"');
-    return sb.toString();
+    return result.append('"').toString();
+  }
+
+  private static void appendEscaped(StringBuilder result, char value) {
+    switch (value) {
+      case '\\' -> result.append("\\\\");
+      case '"' -> result.append("\\\"");
+      case '\n' -> result.append("\\n");
+      case '\r' -> result.append("\\r");
+      case '\t' -> result.append("\\t");
+      default -> result.append(value);
+    }
+  }
+
+  private static List<JsonElement> tail(JsonArray array) {
+    List<JsonElement> values = new ArrayList<>(Math.max(0, array.size() - 1));
+    for (int index = 1; index < array.size(); index++) {
+      values.add(array.get(index));
+    }
+    return values;
+  }
+
+  private boolean isWithinLineLimit(String value) {
+    return value.indexOf('\n') < 0 && value.length() <= options.getMaxLineLength();
   }
 
   private String indent(int level) {

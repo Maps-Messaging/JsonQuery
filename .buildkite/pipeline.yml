@@ -2,12 +2,10 @@ steps:
   - label: ":maven: Build and Deploy"
     command:
       - export SONAR_TOKEN=$(buildkite-agent secret get SONAR_TOKEN)
-      - export NVD_API_KEY=$(buildkite-agent secret get nvd_api_key)
-      - mvn -Dgpg.skip=true clean deploy -Psnapshot -U
-      - mvn sonar:sonar -Dsonar.login=${SONAR_TOKEN}
+      - mvn clean deploy -Psnapshot -U
+      - mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar -Psnapshot -Dsonar.token=$${SONAR_TOKEN} -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.branch.name=development
 
-    env:
-      SONAR_TOKEN: "${SONAR_TOKEN}"
-      BUILDKITE_ANALYTICS_TOKEN: "$(buildkite-agent secret get jsonqueryTestSuite)"
+    secrets:
+      BUILDKITE_ANALYTICS_TOKEN: "jsonqueryTestSuite"
     agents:
-      queue: "raspberrypi_build_agent"
+      queue: "java_build_queue_aws"

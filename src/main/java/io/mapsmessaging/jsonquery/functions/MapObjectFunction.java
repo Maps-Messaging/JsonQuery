@@ -22,66 +22,79 @@ package io.mapsmessaging.jsonquery.functions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-public final class MapObjectFunction implements JsonQueryFunction {
+public final class MapObjectFunction extends AbstractFunction {
+
   @Override
   public String getName() {
     return "mapObject";
   }
 
-
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("mapObject expects 1 argument (mapper expression)");
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
+    requireArgCountExact(rawArgs, 1, "1 argument (mapper expression)");
+    Function<JsonElement, JsonElement> mapper = compileArg(rawArgs.get(0), compiler);
+
+    return data -> mapObject(data, mapper);
+  }
+
+  private static JsonElement mapObject(
+      JsonElement data,
+      Function<JsonElement, JsonElement> mapper) {
+
+    if (data == null || data.isJsonNull() || !data.isJsonObject()) {
+      return JsonNull.INSTANCE;
     }
 
-    Function<JsonElement, JsonElement> mapper = compiler.compile(rawArgs.get(0));
+    JsonObject output = new JsonObject();
+    for (Map.Entry<String, JsonElement> entry : data.getAsJsonObject().entrySet()) {
+      addMappedEntry(output, entry, mapper);
+    }
+    return output;
+  }
 
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonObject()) {
-        return JsonNull.INSTANCE;
-      }
+  private static void addMappedEntry(
+      JsonObject output,
+      Map.Entry<String, JsonElement> entry,
+      Function<JsonElement, JsonElement> mapper) {
 
-      JsonObject input = data.getAsJsonObject();
-      JsonObject output = new JsonObject();
+    JsonElement mapped = mapper.apply(pair(entry));
+    if (mapped == null || !mapped.isJsonObject()) {
+      return;
+    }
 
-      for (Map.Entry<String, JsonElement> entry : input.entrySet()) {
-        JsonObject pair = new JsonObject();
-        pair.addProperty("key", entry.getKey());
-        pair.add("value", entry.getValue() == null ? JsonNull.INSTANCE : entry.getValue());
+    JsonObject mappedObject = mapped.getAsJsonObject();
+    String key = stringValue(mappedObject.get("key"));
+    if (key == null) {
+      return;
+    }
 
-        JsonElement mapped = mapper.apply(pair);
-        if (mapped == null || mapped.isJsonNull() || !mapped.isJsonObject()) {
-          continue;
-        }
+    JsonElement value = mappedObject.get("value");
+    output.add(key, value == null ? JsonNull.INSTANCE : value);
+  }
 
-        JsonObject mappedObject = mapped.getAsJsonObject();
+  private static JsonObject pair(Map.Entry<String, JsonElement> entry) {
+    JsonObject pair = new JsonObject();
+    pair.addProperty("key", entry.getKey());
+    JsonElement value = entry.getValue();
+    pair.add("value", value == null ? JsonNull.INSTANCE : value);
+    return pair;
+  }
 
-        JsonElement newKeyElement = mappedObject.get("key");
-        if (newKeyElement == null || newKeyElement.isJsonNull() || !newKeyElement.isJsonPrimitive()
-            || !newKeyElement.getAsJsonPrimitive().isString()) {
-          continue;
-        }
-        String newKey = newKeyElement.getAsString();
-
-        JsonElement newValueElement = mappedObject.get("value");
-        if (newValueElement == null) {
-          newValueElement = JsonNull.INSTANCE;
-        }
-
-        output.add(newKey, newValueElement);
-      }
-
-      return output;
-    };
+  private static String stringValue(JsonElement element) {
+    if (element == null || !element.isJsonPrimitive()) {
+      return null;
+    }
+    JsonPrimitive primitive = element.getAsJsonPrimitive();
+    return primitive.isString() ? primitive.getAsString() : null;
   }
 }

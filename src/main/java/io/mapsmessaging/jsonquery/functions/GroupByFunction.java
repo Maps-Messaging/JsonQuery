@@ -19,20 +19,65 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-
-import com.google.gson.*;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
 import java.util.List;
 import java.util.function.Function;
 
-public final class GroupByFunction implements JsonQueryFunction {
+public final class GroupByFunction extends AbstractFunction {
+
+  @Override
+  public String getName() {
+    return "groupBy";
+  }
+
+  @Override
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
+    requireArgCountExact(rawArgs, 1, "1 argument: groupBy(keySelector)");
+    Function<JsonElement, JsonElement> keySelector = compileArg(rawArgs.get(0), compiler);
+
+    return data -> group(data, keySelector);
+  }
+
+  private static JsonElement group(
+      JsonElement data,
+      Function<JsonElement, JsonElement> keySelector) {
+
+    if (data == null || data.isJsonNull() || !data.isJsonArray()) {
+      return JsonNull.INSTANCE;
+    }
+
+    JsonObject grouped = new JsonObject();
+    for (JsonElement element : data.getAsJsonArray()) {
+      String key = toGroupKey(keySelector.apply(element));
+      if (key != null) {
+        bucket(grouped, key).add(element);
+      }
+    }
+    return grouped;
+  }
+
+  private static JsonArray bucket(JsonObject grouped, String key) {
+    JsonElement existing = grouped.get(key);
+    if (existing != null && existing.isJsonArray()) {
+      return existing.getAsJsonArray();
+    }
+
+    JsonArray bucket = new JsonArray();
+    grouped.add(key, bucket);
+    return bucket;
+  }
 
   private static String toGroupKey(JsonElement keyValue) {
-    if (keyValue == null || keyValue.isJsonNull()) {
-      return null;
-    }
-    if (!keyValue.isJsonPrimitive()) {
+    if (keyValue == null || !keyValue.isJsonPrimitive()) {
       return null;
     }
 
@@ -43,56 +88,6 @@ public final class GroupByFunction implements JsonQueryFunction {
     if (primitive.isNumber()) {
       return primitive.getAsNumber().toString();
     }
-    if (primitive.isBoolean()) {
-      return Boolean.toString(primitive.getAsBoolean());
-    }
-    return null;
-  }
-
-  @Override
-  public String getName() {
-    return "groupBy";
-  }
-
-  @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
-    if (rawArgs.size() != 1) {
-      throw new IllegalArgumentException("groupBy expects 1 argument: groupBy(keySelector)");
-    }
-
-    Function<JsonElement, JsonElement> keySelector = compiler.compile(rawArgs.get(0));
-
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        return JsonNull.INSTANCE;
-      }
-
-      JsonObject grouped = new JsonObject();
-      JsonArray input = data.getAsJsonArray();
-
-      for (JsonElement element : input) {
-        JsonElement keyValue = keySelector.apply(element);
-        String key = toGroupKey(keyValue);
-        if (key == null) {
-          continue;
-        }
-
-        JsonArray bucket;
-        JsonElement existing = grouped.get(key);
-        if (existing == null || !existing.isJsonArray()) {
-          bucket = new JsonArray();
-          grouped.add(key, bucket);
-        } else {
-          bucket = existing.getAsJsonArray();
-        }
-
-        bucket.add(element);
-      }
-
-      return grouped;
-    };
+    return primitive.isBoolean() ? Boolean.toString(primitive.getAsBoolean()) : null;
   }
 }

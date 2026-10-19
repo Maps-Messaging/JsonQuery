@@ -19,10 +19,7 @@
 
 package io.mapsmessaging.jsonquery.functions.numeric;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
-import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 import io.mapsmessaging.jsonquery.functions.JsonQueryFunction;
 
@@ -37,46 +34,26 @@ public final class ProdFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (!rawArgs.isEmpty()) {
       throw new IllegalArgumentException("prod expects 0 arguments");
     }
+    return ProdFunction::product;
+  }
 
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
-      if (!data.isJsonArray()) {
-        throw new IllegalArgumentException("Array expected");
-      }
+  private static JsonElement product(JsonElement data) {
+    List<Double> values = NumericArray.values(data);
+    if (values == null || values.isEmpty()) {
+      return NumericArray.nullValue();
+    }
 
-      JsonArray array = data.getAsJsonArray();
-      if (array.isEmpty()) {
-        return JsonNull.INSTANCE;
-      }
-
-      double product = 1.0;
-      boolean seenNumber = false;
-
-      for (JsonElement element : array) {
-        if (element == null || element.isJsonNull()) {
-          continue;
-        }
-        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
-          throw new IllegalArgumentException("Number expected");
-        }
-        product *= element.getAsDouble();
-        seenNumber = true;
-      }
-
-      if (!seenNumber) {
-        return JsonNull.INSTANCE;
-      }
-
-      if (product == Math.rint(product)) {
-        return new JsonPrimitive((long) product);
-      }
-      return new JsonPrimitive(product);
-    };
+    double product = 1.0;
+    for (double value : values) {
+      product *= value;
+    }
+    return NumericArray.number(product);
   }
 }

@@ -19,9 +19,7 @@
 
 package io.mapsmessaging.jsonquery.functions;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonNull;
 import com.google.gson.JsonPrimitive;
 import io.mapsmessaging.jsonquery.JsonQueryCompiler;
 
@@ -36,40 +34,34 @@ public final class SumFunction implements JsonQueryFunction {
   }
 
   @Override
-  public Function<JsonElement, JsonElement> compile(List<JsonElement> rawArgs, JsonQueryCompiler compiler) {
+  public Function<JsonElement, JsonElement> compile(
+      List<JsonElement> rawArgs,
+      JsonQueryCompiler compiler) {
+
     if (!rawArgs.isEmpty()) {
       throw new IllegalArgumentException("sum expects 0 arguments");
     }
+    return SumFunction::sum;
+  }
 
-    return data -> {
-      if (data == null || data.isJsonNull()) {
-        return JsonNull.INSTANCE;
-      }
+  private static JsonElement sum(JsonElement data) {
+    if (data == null || data.isJsonNull()) {
+      return JsonQueryFunction.nullValue();
+    }
+    if (!data.isJsonArray()) {
+      throw new IllegalArgumentException("Array expected");
+    }
 
-      if (!data.isJsonArray()) {
-        throw new IllegalArgumentException("Array expected");
+    double sum = 0.0;
+    for (JsonElement element : data.getAsJsonArray()) {
+      if (element == null || element.isJsonNull()) {
+        continue;
       }
-
-      JsonArray array = data.getAsJsonArray();
-      if (array.isEmpty()) {
-        return new JsonPrimitive(0);
+      if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+        throw new IllegalArgumentException("Number expected");
       }
-
-      double sum = 0.0;
-      for (JsonElement element : array) {
-        if (element == null || element.isJsonNull()) {
-          continue;
-        }
-        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
-          throw new IllegalArgumentException("Number expected");
-        }
-        sum += element.getAsDouble();
-      }
-
-      if (sum == Math.rint(sum)) {
-        return new JsonPrimitive((long) sum);
-      }
-      return new JsonPrimitive(sum);
-    };
+      sum += element.getAsDouble();
+    }
+    return JsonQueryFunction.numberValue(sum);
   }
 }
